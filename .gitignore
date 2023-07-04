@@ -22,3 +22,6 @@ go.work
 
 # Project Specific
 app/pics
+
+# General
+.DS_Store
