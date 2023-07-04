@@ -5,7 +5,7 @@ Copyright © 2023 Judson Stevens oss@judsonstevens.dev
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
+with the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
@@ -13,7 +13,7 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+THE SOFTWARE IS PROVIDED "AS IS," WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
@@ -23,15 +23,15 @@ THE SOFTWARE.
 */
 
 import (
-	"fmt"
-	"go-steg/app/image_processing"
-
 	"github.com/spf13/cobra"
+	"go-steg/app/image_processing"
+	"go-steg/cli/helpers"
 )
 
 var embedFileName string
 var carrierFileNames []string
 var password string
+var outputFileDir string
 
 // encodeCmd represents the encode command
 var encodeCmd = &cobra.Command{
@@ -43,14 +43,26 @@ This method will use the passed in password to attempt to generate a mask to use
 Depending on the mask generated, we may need to generate a new mask to use to secure the embedded information,
 as the size of embed information may be larger than the mask can handle.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("encode called")
-		fmt.Println("embed-file-name:", embedFileName)
-		fmt.Println("carrierFileName:", carrierFileNames)
-		fmt.Println("password:", password)
-		err := image_processing.EncodeByFileNames(
+		err := helpers.ValidateIsValidDirectory(outputFileDir)
+		if err != nil {
+			panic(err)
+		}
+
+		filesToCheck := append(carrierFileNames, embedFileName)
+
+		for _, fileName := range filesToCheck {
+			err := helpers.ValidateIsValidFile(fileName)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		err = image_processing.EncodeByFileNames(
 			carrierFileNames,
 			embedFileName,
-			1)
+			1,
+			password,
+			outputFileDir)
 		if err != nil {
 			panic(err)
 		}
@@ -89,4 +101,25 @@ func init() {
 		"p",
 		"",
 		"The password to use to generate the mask to use to embed the embed file into the carrier file(s)")
+	err = encodeCmd.MarkPersistentFlagRequired("password")
+	if err != nil {
+		panic(err)
+	}
+
+	encodeCmd.PersistentFlags().StringVarP(
+		&outputFileDir,
+		"outputFileDir",
+		"o",
+		"",
+		"The directory to output the resulting files to. This must be either a valid relative path or "+
+			"a valid absolute path")
+	err = encodeCmd.MarkPersistentFlagRequired("outputFileDir")
+	if err != nil {
+		panic(err)
+	}
+
+	err = encodeCmd.PersistentFlags().SetAnnotation("outputFileDir", cobra.BashCompSubdirsInDir, []string{})
+	if err != nil {
+		panic(err)
+	}
 }

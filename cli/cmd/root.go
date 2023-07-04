@@ -33,14 +33,11 @@ var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "app",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Use:   "go-steg",
+	Short: "Go-steg is a command line tool for steganography",
+	Long: `Go-steg uses Least Bit Steganography to hide information in images. It can be used to
+hide photos in other photos, using a method that is very resistant if not impervious to typical
+techniques of stegoanalisys. `,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
