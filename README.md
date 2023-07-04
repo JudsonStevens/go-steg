@@ -1,3 +1,5 @@
+![go-steg-logo](https://github.com/JudsonStevens/go-steg/assets/35241250/7be4023c-e948-4c62-86d0-09bf5c1b1cf0)
+
 # Go-Steg
 
 ## Notes
