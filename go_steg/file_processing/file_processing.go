@@ -3,7 +3,7 @@ package file_processing
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"go-steg/app/image_processing"
+	"go-steg/go_steg/image_processing"
 	"go.uber.org/zap"
 	"mime/multipart"
 )

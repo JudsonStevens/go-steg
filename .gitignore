@@ -21,7 +21,7 @@ go.work
 .idea
 
 # Project Specific
-app/pics
+go_steg/pics
 
 # General
 .DS_Store

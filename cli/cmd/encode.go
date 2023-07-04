@@ -24,8 +24,8 @@ THE SOFTWARE.
 
 import (
 	"github.com/spf13/cobra"
-	"go-steg/app/image_processing"
 	"go-steg/cli/helpers"
+	"go-steg/go_steg/image_processing"
 )
 
 var embedFileName string

@@ -23,8 +23,8 @@ THE SOFTWARE.
 */
 
 import (
-	"go-steg/app/image_processing"
 	"go-steg/cli/helpers"
+	"go-steg/go_steg/image_processing"
 
 	"github.com/spf13/cobra"
 )

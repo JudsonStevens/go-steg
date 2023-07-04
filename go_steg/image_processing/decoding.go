@@ -3,8 +3,8 @@ package image_processing
 import (
 	"encoding/binary"
 	"fmt"
-	"go-steg/app/bit_manipulation"
-	"go-steg/app/logging"
+	"go-steg/go_steg/bit_manipulation"
+	"go-steg/go_steg/logging"
 	"image"
 	"io"
 	"os"

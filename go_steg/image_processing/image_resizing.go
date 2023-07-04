@@ -2,7 +2,7 @@ package image_processing
 
 import (
 	"fmt"
-	"go-steg/app/logging"
+	"go-steg/go_steg/logging"
 	"image"
 	"image/draw"
 	"image/png"
