@@ -1,4 +1,4 @@
-![go-steg-logo](https://github.com/JudsonStevens/go-steg/assets/35241250/7be4023c-e948-4c62-86d0-09bf5c1b1cf0 =450x450)
+<img src=https://github.com/JudsonStevens/go-steg/assets/35241250/7be4023c-e948-4c62-86d0-09bf5c1b1cf0 width="250" height="300" />
 
 # Go-Steg
 
