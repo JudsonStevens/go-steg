@@ -19,3 +19,6 @@ go.work
 
 # Jetbrains
 .idea
+
+# Project Specific
+app/pics

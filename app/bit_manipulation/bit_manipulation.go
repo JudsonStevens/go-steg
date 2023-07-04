@@ -56,15 +56,15 @@ func GetLastTwoBits(b byte) byte {
 	return b & fourthQuarterOfByteMax
 }
 
-// ConstructByteOfQuartersAsSlice builds a byte out of a slice of bytes
-func ConstructByteOfQuartersAsSlice(b []byte) byte {
-	return ConstructByteOfQuarters(b[0], b[1], b[2], b[3])
+// ConstructByteFromQuartersAsSlice builds a byte out of a slice of bytes
+func ConstructByteFromQuartersAsSlice(b []byte) byte {
+	return ConstructByteFromQuarters(b[0], b[1], b[2], b[3])
 }
 
-// ConstructByteOfQuarters builds a byte based on the quarters passed in
+// ConstructByteFromQuarters builds a byte based on the quarters passed in
 //
 // This is done by left shifting the first byte by 6, the second by 4, the third by 2, and then ORing them together
-func ConstructByteOfQuarters(first, second, third, fourth byte) byte {
+func ConstructByteFromQuarters(first, second, third, fourth byte) byte {
 	return (((first << 6) | (second << 4)) | third<<2) | fourth
 }
 

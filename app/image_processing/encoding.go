@@ -1,7 +1,7 @@
 package image_processing
 
 import (
-	crypto_rand "crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -10,7 +10,8 @@ import (
 	"go.uber.org/zap"
 	"image"
 	"image/draw"
-	math_rand "math/rand"
+	mathrand "math/rand"
+	"path/filepath"
 	"strings"
 
 	"bytes"
@@ -18,7 +19,6 @@ import (
 	_ "image/jpeg"
 	"image/png"
 	"io"
-	"io/ioutil"
 	"os"
 )
 
@@ -38,13 +38,18 @@ func init() {
 }
 
 // EncodeByFileNames will take in a list of carrier file names, a data image, and a list of the resulting image file names
-func EncodeByFileNames(carrierFileName, dataFileName string, uniquePhotoID uint64) (err error) {
-	return MultiCarrierEncodeByFileNames([]string{carrierFileName}, dataFileName, uniquePhotoID)
+func EncodeByFileNames(carrierFileNames []string, dataFileName string, uniquePhotoID uint64, password string, outputFileDir string) (err error) {
+	return MultiCarrierEncodeByFileNames(carrierFileNames, dataFileName, uniquePhotoID, password, outputFileDir)
 }
 
 // MultiCarrierEncodeByFileNames takes in a series of files, a data file, and a series of strings to name the resulting files
-// and passes everything to the encode methods
-func MultiCarrierEncodeByFileNames(carrierFileNames []string, dataFileName string, uniquePhotoID uint64) (err error) {
+// and passes everything to the Encode methods
+func MultiCarrierEncodeByFileNames(
+	carrierFileNames []string,
+	dataFileName string,
+	uniquePhotoID uint64,
+	password string,
+	outputFileDir string) (err error) {
 	if len(carrierFileNames) == 0 {
 		logger.Errorf("Missing carrier file names")
 		return fmt.Errorf("missing carrier file names")
@@ -57,11 +62,12 @@ func MultiCarrierEncodeByFileNames(carrierFileNames []string, dataFileName strin
 	carriers := make([]io.Reader, 0, len(carrierFileNames))
 
 	//Iterate through and open each carrier file
-	for _, name := range carrierFileNames {
+	for idx, name := range carrierFileNames {
 		carrier, err := os.Open(name)
-		splitFileName := strings.Split(name, "/")
-		baseFileName := splitFileName[len(splitFileName)-1]
-		embeddedCarrierName := fmt.Sprintf("../../images/embedded_carriers/%s", baseFileName)
+		fileName := filepath.Base(name)
+		fileExtension := filepath.Ext(fileName)
+		baseFileName := strings.TrimSuffix(fileName, fileExtension)
+		embeddedCarrierName := fmt.Sprintf("%s/%s-%d-embedded%s", outputFileDir, baseFileName, idx, fileExtension)
 		embeddedCarrierFileNames = append(embeddedCarrierFileNames, embeddedCarrierName)
 		if err != nil {
 			logger.Errorf("Error opening carrier file: %v", err)
@@ -118,13 +124,13 @@ func MultiCarrierEncodeByFileNames(carrierFileNames []string, dataFileName strin
 	}
 
 	//Here is where we encode the data into multiple carriers
-	// If we receive an error, make sure to remove all of the result files
-	err = MultiCarrierEncode(carriers, embedFile, embeddedCarrierWriters, uniquePhotoID)
+	// If we receive an error, make sure to remove all the result files
+	err = MultiCarrierEncode(carriers, embedFile, embeddedCarrierWriters, uniquePhotoID, password)
 	if err != nil {
 		for _, name := range embeddedCarrierFileNames {
 			_ = os.Remove(name)
-			logger.Errorf("Error encoding file - ", name, err)
-			return fmt.Errorf("Issue encoding file %s: %w", name, err)
+			logger.Errorf("Error encoding file name: %s, error: %v", name, err)
+			return fmt.Errorf("issue encoding file %s: %w", name, err)
 		}
 	}
 	return err
@@ -134,22 +140,22 @@ func MultiCarrierEncodeByFileNames(carrierFileNames []string, dataFileName strin
 // function to encode that information into separate files.
 // It does this by splitting the dataBytes reader into separate io.Readers based on how many
 // carrier files there are
-func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Writer, uniquePhotoID uint64) error {
+func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Writer, uniquePhotoID uint64, password string) error {
 	// Read all the data from the embed file
-	dataBytes, err := ioutil.ReadAll(data)
+	dataBytes, err := io.ReadAll(data)
 	if err != nil {
 		return fmt.Errorf("Error reading data %w\n", err)
 	}
 
-	//Make the chunk size the length of the bytes slice divided by the number of carrier files
+	//Make the chunk size the length of the byte slices divided by the number of carrier files
 	chunkSize := len(dataBytes) / len(carriers)
 
-	//Make a slice of readers with a starting length of 0, and a cap of the number of carrier files
+	//Make a slice of readers with a starting length of 0 and a cap using the number of carrier files
 	dataChunks := make([]io.Reader, 0, len(carriers))
 
 	//Initialize a counter for the for loop in order to track the number of chunks put into encoder
 	chunksCount := 0
-	//Run a loop while the increment counter is less than the total length of the byte array of data bytes
+	//Run a loop while the increment counter is less than the total length of the byte array
 	// and the chunks count is less than the total number of carriers
 	for i := 0; i < len(dataBytes) && chunksCount < len(carriers); i += chunkSize {
 		chunksCount++
@@ -164,7 +170,9 @@ func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Write
 	}
 
 	//Generate the mask information
-	mask := generateMaskingInfo()
+	mask := generateMaskingInfo(password)
+
+	fmt.Println("Masking info: ", mask)
 
 	//Initialize a variable for the count since we need it to be an uint16
 	var photoCount uint16
@@ -304,11 +312,11 @@ func setHeaderInformation(RGBAImage *image.RGBA, dataCountInt uint32, uniqueIDIn
 	dataCountBytesCount := 0
 	totalCount := 0
 	//Get the bytes that make up each integer
-	//The photo ID will be 48 bits, but we use a 64 bit variable as that's what the method calls for
+	//The photo ID will be 48 bits, but we use a 64-bit variable as that's what the method calls for
 	// 48 unsigned bits:
 	// photoID - 0 - 281,474,976,710,655 or 281.474 trillion
 	photoIDBytes := bit_manipulation.QuartersOfBytes64(uniqueIDInt)
-	//The number is only 6 bits but the lowest we can go for the PutUint method is 16
+	//The number is only 6 bits, but the lowest we can go for the PutUint method is 16
 	// photoNumber - 0 - 63
 	photoNumberBytes := bit_manipulation.QuartersOfBytes16(photoNumberInt)
 	//The data count can be up to 24 bits long, and we store it in a 32-bit unsigned integer
@@ -456,24 +464,25 @@ func DetermineOpenSlotsWithMask(RGBAImage *image.RGBA, dx, dy int, mask Mask) (o
 	return openSlotCount
 }
 
-// generateMaskingInfo will generate a cryptographically safe random number to use
-// as a seed value for the random number generate in the math package, and then generate
-// multiple random numbers to use for the masking operation. We do this by generating
-// a random 32-bit number to serve as the mask, a random 32-bit number that is less than 8421504
-// (the largest number that can be multiplied by the data byte value and still not go over signed max)
-// and two random numbers between 1 and 30 to serve as the index values for the mask.
+// generateMaskingInfo will generate a "mostly" (yeah, I know) cryptographically safe random number to use
+// as a seed value for the random number generator in the math package, and then generate
+// multiple random numbers to use for the masking operation.
+// It uses the passed in password to generate a reproducible seed value for the random number generation.
+//
+// We then generate a random 32-bit number to serve as the mask, a random 32-bit number that is less than 8421504
+// (the largest number that can be multiplied by the data byte value (max 255) and still not go over signed max)
+// and two random numbers between 0 and 29 to serve as the index values to check for the mask.
 // These index values will determine what indexes in the 32-bit mask will be used to determine
 // if the data byte value will be changed or not.
-func generateMaskingInfo() Mask {
-	var byteSlice [8]byte
+func generateMaskingInfo(password string) Mask {
 	//Make a slice of int16 numbers for our index compare
 	var indexRange = make([]int16, 30)
 
-	_, err := crypto_rand.Read(byteSlice[:])
-	if err != nil {
-		panic(err)
-	}
-	math_rand.NewSource(int64(binary.LittleEndian.Uint64(byteSlice[:])))
+	hashedPassword := hashPassword(password)
+
+	seedValue := generateNumbersFromHash(hashedPassword)
+
+	rng := mathrand.New(mathrand.NewSource(int64(seedValue)))
 
 	// Create a range of numbers from 1-30
 	var i int16
@@ -481,12 +490,12 @@ func generateMaskingInfo() Mask {
 		indexRange[i-1] = i
 	}
 	//Generate a random 32 bit number
-	mask := math_rand.Int31()
+	mask := rng.Int31()
 	// This is the largest number that can be multiplied by the data byte value and still not go over signed max
 	// i.e. 8421504 * 255 < 2,147,483,647 (signed 32-bit max)
-	multiplier := math_rand.Int31n(8421504)
+	multiplier := rng.Int31n(8421504)
 	//Get a random index from 0-29 (array is 31 spaces, we don't want to compare the last two)
-	randomIndex := math_rand.Intn(29)
+	randomIndex := rng.Intn(29)
 	// Get the first index we'll compare
 	firstIndex := indexRange[randomIndex]
 	// Set the value of the index that we just pulled to the value of the last index
@@ -494,14 +503,32 @@ func generateMaskingInfo() Mask {
 	//Remake the range of numbers to exclude the last value (slice is exclusive)
 	indexRange = indexRange[:29]
 	//Generate a random value from 0-28 and grab the second index we'll compare
-	randomIndex = math_rand.Intn(28)
+	randomIndex = rng.Intn(28)
 	secondIndex := indexRange[randomIndex]
+	// Randomly decide the boolean value that we'll use to determine if we change the data byte value or not
 	var changeBoolean bool
-	if math_rand.Intn(2) == 1 {
+	if rng.Intn(2) == 1 {
 		changeBoolean = true
 	} else {
 		changeBoolean = false
 	}
 
 	return Mask{mask, multiplier, firstIndex, secondIndex, changeBoolean}
+}
+
+func hashPassword(password string) []byte {
+	hashFunction := sha256.New()
+	_, err := hashFunction.Write([]byte(password))
+	if err != nil {
+		logger.Errorf("Error hashing password: %v", err)
+		panic(err)
+	}
+
+	return hashFunction.Sum(nil)
+}
+
+func generateNumbersFromHash(hash []byte) uint64 {
+	subHash := hash[:8]
+
+	return binary.BigEndian.Uint64(subHash)
 }
