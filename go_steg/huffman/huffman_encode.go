@@ -1,8 +1,12 @@
 package huffman
 
-import (
-	"sort"
-)
+import "sort"
+
+/*
+Currently a work in progress.
+Eventually we'll want to use this to encode the data we are going to embed in a Huffman tree, which will allow us to
+store much more data than before.
+*/
 
 // Node defines the node we'll use to build our Huffman tree - the value of the leaf nodes
 // are the integer values of the channels, and the values of the tree/root nodes are the frequencies
