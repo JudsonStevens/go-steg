@@ -2,11 +2,15 @@ package helpers
 
 import (
 	"errors"
+	"fmt"
 	"os"
 )
 
+var UseMask bool
+
 // ValidateIsValidDirectory checks if the directory path is valid and exists
 func ValidateIsValidDirectory(directoryPath string) error {
+	fmt.Println("Validating directory path: ", directoryPath)
 	dir, err := os.Stat(directoryPath)
 	if err != nil {
 		return err

@@ -33,7 +33,12 @@ func SaveAndResizeFile(file *multipart.FileHeader, fileCount uint8, carrierPhoto
 		logger.Errorf("Error opening received file - %v", err)
 		return "", fmt.Errorf("issue with opening a file: %v", err)
 	}
-	defer receivedFile.Close()
+	defer func(receivedFile multipart.File) {
+		err := receivedFile.Close()
+		if err != nil {
+			logger.Errorf("Error closing received file - %v", err)
+		}
+	}(receivedFile)
 
 	//Create a new UUID to save the file - this is mostly so files saved at the same time don't somehow conflict
 	// over naming. TODO: Evaluate taking this out

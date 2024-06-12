@@ -1,6 +1,8 @@
 # Go-Steg
 
 ## Notes
+- Use `go install` to install the package.
+
 Some background on images:
 - Digital images are typically made up of pixels.
 - Each pixel has different color channels - your general RGBA digital image has 4 channels, one each for Red,
