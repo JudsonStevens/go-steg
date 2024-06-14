@@ -31,7 +31,7 @@ import (
 var embedFileName string
 var carrierFileNames []string
 var password string
-var outputFileDir string
+var encodeOutputFileDir string
 
 // encodeCmd represents the encode command
 var encodeCmd = &cobra.Command{
@@ -43,7 +43,7 @@ This method will use the passed in password to attempt to generate a mask to use
 Depending on the mask generated, we may need to generate a new mask to use to secure the embedded information,
 as the size of embed information may be larger than the mask can handle.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := helpers.ValidateIsValidDirectory(outputFileDir)
+		err := helpers.ValidateIsValidDirectory(encodeOutputFileDir)
 		if err != nil {
 			panic(err)
 		}
@@ -62,7 +62,7 @@ as the size of embed information may be larger than the mask can handle.`,
 			embedFileName,
 			1,
 			password,
-			outputFileDir)
+			encodeOutputFileDir)
 		if err != nil {
 			panic(err)
 		}
@@ -107,7 +107,7 @@ func init() {
 	}
 
 	encodeCmd.PersistentFlags().StringVarP(
-		&outputFileDir,
+		&encodeOutputFileDir,
 		"outputFileDir",
 		"o",
 		"",
@@ -116,6 +116,18 @@ func init() {
 	err = encodeCmd.MarkPersistentFlagRequired("outputFileDir")
 	if err != nil {
 		panic(err)
+	}
+
+	encodeCmd.PersistentFlags().BoolVarP(
+		&helpers.UseMask,
+		"useMask",
+		"u",
+		false,
+		"Use a discernability mask to embed the embed file into the carrier file(s)")
+	err = encodeCmd.MarkPersistentFlagRequired("useMask")
+	if err != nil {
+		panic(err)
+
 	}
 
 	err = encodeCmd.PersistentFlags().SetAnnotation("outputFileDir", cobra.BashCompSubdirsInDir, []string{})

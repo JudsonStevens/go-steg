@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-steg/go_steg/bit_manipulation"
 	"go-steg/go_steg/logging"
+	"go-steg/cli/helpers"
 	"image"
 	"io"
 	"os"
@@ -103,28 +104,40 @@ func Decode(carrier io.Reader, result io.Writer, mask Mask) error {
 
 	dataCount := extractDataCount(RGBAImage)
 
-	fmt.Printf("Data count for this carrier is - %v\n", dataCount)
-	fmt.Printf("Mask size for this data file is - %v\n", mask.maskInt)
-	// var count int
+	fmt.Printf("Data count for this carrier: %v\n", dataCount)
 
-	openSlots := DetermineOpenSlotsWithMask(RGBAImage, dx, dy, mask)
-
-	fmt.Printf("Number of slots availabe with mask: %v\n", openSlots)
+	if helpers.UseMask {
+		openSlots := DetermineOpenSlotsWithMask(RGBAImage, dx, dy, mask)
+		fmt.Printf("Number of slots availabe with mask: %v\n", openSlots)
+	}
 
 	for x := 0; x < dx && dataCount > 0; x++ {
 		for y := totalReservedPixels; y < dy && dataCount > 0; y++ {
 			c := RGBAImage.RGBAAt(x, y)
-			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.R) == mask.changeBoolean {
+			if helpers.UseMask && bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.R) == mask.changeBoolean {
+				dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.R))
+				dataCount--
+			} else if !helpers.UseMask {
 				dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.R))
 				dataCount--
 			}
-			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.G) == mask.changeBoolean {
-				dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.G))
-				dataCount--
+			if dataCount > 0 {
+				if helpers.UseMask && bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.G) == mask.changeBoolean {
+					dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.G))
+					dataCount--
+				} else if !helpers.UseMask {
+					dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.G))
+					dataCount--
+				}
 			}
-			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.B) == mask.changeBoolean {
-				dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.B))
-				dataCount--
+			if dataCount > 0 {
+				if helpers.UseMask && bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.B) == mask.changeBoolean {
+					dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.B))
+					dataCount--
+				} else if !helpers.UseMask {
+					dataBytes = append(dataBytes, bit_manipulation.GetLastTwoBits(c.B))
+					dataCount--
+				}
 			}
 			if dataCount <= 0 {
 				fmt.Printf("Last decoded pixel location - (%v, %v)\n", x, y)
@@ -132,8 +145,8 @@ func Decode(carrier io.Reader, result io.Writer, mask Mask) error {
 		}
 	}
 
-	fmt.Printf("Data count after loop is - %v\n", dataCount)
-	fmt.Printf("Data bytes length after loop is - %v\n", len(dataBytes))
+	fmt.Printf("Data count after loop is: %v\n", dataCount)
+	fmt.Printf("Data bytes length after loop is: %v\n", len(dataBytes))
 
 	if dataCount < 0 {
 		dataBytes = dataBytes[:len(dataBytes)+dataCount] //remove bytes that are not part of data and mistakenly added

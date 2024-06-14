@@ -25,3 +25,7 @@ go_steg/pics
 
 # General
 .DS_Store
+
+*/pics/*
+
+.DS_Store

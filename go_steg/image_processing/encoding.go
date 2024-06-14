@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"go-steg/cli/helpers"
 	"go-steg/go_steg/bit_manipulation"
 	"go-steg/go_steg/logging"
 	"go.uber.org/zap"
@@ -55,6 +56,11 @@ func MultiCarrierEncodeByFileNames(
 		return fmt.Errorf("missing carrier file names")
 	}
 
+	logger.Infof("Carrier file names: %v", carrierFileNames)
+	logger.Infof("Data file name: %v", dataFileName)
+	logger.Infof("Unique photo ID: %v", uniquePhotoID)
+	logger.Infof("Number of carrier files: %v", len(carrierFileNames))
+
 	//Make a slice to hold the names of the embedded carrier image files
 	embeddedCarrierFileNames := make([]string, len(carrierFileNames))
 
@@ -87,7 +93,7 @@ func MultiCarrierEncodeByFileNames(
 	embedFile, err := os.Open(dataFileName)
 	if err != nil {
 		logger.Errorf("Error opening the data file: %v", err)
-		return fmt.Errorf("Error opening data file %s: %w", dataFileName, err)
+		return fmt.Errorf("error opening data file %s: %w", dataFileName, err)
 	}
 	defer func() {
 		closeErr := embedFile.Close()
@@ -98,17 +104,17 @@ func MultiCarrierEncodeByFileNames(
 
 	if err != nil {
 		logger.Errorf("Error closing the data file: %v", err)
-		return fmt.Errorf("Issue closing the data file: %w", err)
+		return fmt.Errorf("issue closing the data file: %w", err)
 	}
 
 	//Make a slice of io writers in order to create the new files that are embedded
-	embeddedCarrierWriters := make([]io.Writer, 0, len(embeddedCarrierFileNames))
+	embeddedCarrierWriters := make([]io.Writer, 0, len(embeddedCarrierFileNames[1:]))
 
-	for _, name := range embeddedCarrierFileNames[2:] {
+	for _, name := range embeddedCarrierFileNames[1:] {
 		result, err := os.Create(name)
 		if err != nil {
-			logger.Errorf("Error creating result file %s: %w", name, err)
-			return fmt.Errorf("Error creating result file %s: %w", name, err)
+			logger.Errorf("Error creating result file %s: %s", name, err)
+			return fmt.Errorf("error creating result file %s: %w", name, err)
 		}
 		defer func() {
 			closeErr := result.Close()
@@ -118,7 +124,7 @@ func MultiCarrierEncodeByFileNames(
 		}()
 
 		if err != nil {
-			logger.Errorf("Error closing the carrier image: ", err)
+			logger.Errorf("Error closing the carrier image: %s", err)
 		}
 		embeddedCarrierWriters = append(embeddedCarrierWriters, result)
 	}
@@ -179,30 +185,36 @@ func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Write
 	//Use another loop to actually encode everything
 	for i := 0; i < len(carriers); i++ {
 		if err := Encode(carriers[i], dataChunks[i], results[i], photoCount, uniquePhotoID, mask); err != nil {
-			return fmt.Errorf("Error encoding chunk with index %d: %w", i, err)
+			return fmt.Errorf("error encoding chunk with index %d: %w", i, err)
 		}
 		photoCount++
 	}
 	return err
 }
 
-// Encode will take in a carrier reader, data reader, and a result file writer and encode the data reader into the carrier,
-// writing the result to the result file
-// TODO: When encoding, use the indiscernability mask - this entails choosing two bits to function as the mask, and if the
-// channel fits, change the last two bits. For example - consider a mask of 00[11] 0000 where the [] highlight the mask deciders and a
-// change ratio of 0.5
+// Encode will take in a carrier reader, data reader, and a result file writer and encode the data reader into the
+// carrier, writing the result to the result file
+//
+// When encoding, we can use an indiscernability mask - this entails choosing two bits to function as the mask, and if
+// the channel fits, change the last two bits.
+// For example, consider a mask of 00[11] 0000 where the [] highlight the mask deciders and a change boolean of true.
 // We then compare the mask to the channel/byte - 00[11] 0000 <=> 0010 0000
-// In this case, the bits 11 and 10 are compared - 1 bit has changed, for 1/2 or a 0.5 change ratio
-// That means we use this channel/byte to hide information - if the data byte is 0000 0011 then our channel becomes 0010 0011
+// In this case, the bits 11 and 10 are compared - 1 bit has changed,
+// and so we change the last two bits of the channel.
+// That means we use this channel/byte to hide information - if the data byte is 0000 0011, then our channel
+// goes from 0010 0000 to 0010 0011
 func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber uint16, uniquePhotoID uint64, mask Mask) error {
 	// Open the carrier image as an RGBA image, along with getting the format of the carrier image
 	RGBAImage, format, err := getImageAsRGBA(carrier)
 	if err != nil {
 		return fmt.Errorf("Error parsing carrier image: %w\n", err)
 	}
+	if format != "png" && format != "jpeg" {
+		return fmt.Errorf("Unsupported carrier format\n")
+	}
 
 	//Open a buffered channel for the data - if the channel is full it will block until there's space
-	//This makes an empty byte channel with a length of 128
+	//This makes an empty byte channel with a length of 128 bytes
 	dataBytesChannel := make(chan byte, 128)
 
 	//Open an unbuffered channel for errors we encounter
@@ -211,35 +223,35 @@ func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber u
 	//Read the image data to make sure it's good and fill the channel
 	go readData(data, dataBytesChannel, errChannel)
 
-	//Set a boolean to tell if we have more data in the for loops
+	//Set a boolean to tell if we have more data in the for loop
 	hasMoreBytes := true
 
-	//dataCount keeps track of the size of the data in order to store that information in the dataSizeHeader area of the carrier file
+	//dataCount keeps track of the data size to store that information in the dataSizeHeader area of the carrier file
 	var dataCount uint32
 
-	//Get the bounds of the image as they don't necessarily start at 0
+	//Get the bounds of the image
 	bounds := RGBAImage.Bounds()
 
-	//TODO: Occasionally the mask is too small - do we set a floor? Reduces the random range.
-	fmt.Printf("Photo number - %v - Mask size - %v\n", pictureNumber, mask.maskInt)
-	//Iterate over each pixel of the data we've received, left to right, top to bottom
+	if helpers.UseMask {
+		//TODO: Occasionally the mask is too small - do we set a floor? Reduces the random range.
+		openSlots := DetermineOpenSlotsWithMask(RGBAImage, bounds.Dx(), bounds.Dy(), mask)
+
+		fmt.Printf("Number of slots availabe with mask: %v\n", openSlots)
+	}
+
+	// Iterate over every pixel starting at the 13th y pixel.
+	// This gives room for the photo id and count to be stored.
+	// Iterate over each pixel of the data we've received, top to bottom, left to right
 	//	[
-	//		1, 2, 3, 4,
-	//		5, 6, 7, 8,
-	//		9, 10, 11, 12
+	//		1, 4, 7, 10,
+	//		2, 5, 8, 11,
+	//		3, 6, 9, 12
 	//	]
-
-	openSlots := DetermineOpenSlotsWithMask(RGBAImage, bounds.Dx(), bounds.Dy(), mask)
-
-	fmt.Printf("Number of slots availabe with mask: %v\n", openSlots)
-
-	//Iterate over every pixel starting at the 13th y pixel. This gives room for
-	// the photo id and count to be stored
 	for x := 0; x < bounds.Dx() && hasMoreBytes; x++ {
 		for y := totalReservedPixels; y < bounds.Dy() && hasMoreBytes; y++ {
 			//Get the pixel at the current location
 			c := RGBAImage.RGBAAt(x, y)
-			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.R) == mask.changeBoolean {
+			if helpers.UseMask && bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.R) == mask.changeBoolean {
 				//Set hasMoreBytes equal to the return of the setColorSegment method, which lets us know if there is more data
 				hasMoreBytes, err = setColorSegment(&c.R, dataBytesChannel, errChannel)
 				if err != nil {
@@ -249,33 +261,66 @@ func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber u
 				if hasMoreBytes {
 					dataCount++
 				}
-			}
-			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.G) == mask.changeBoolean {
-				hasMoreBytes, err = setColorSegment(&c.G, dataBytesChannel, errChannel)
+			} else if !helpers.UseMask {
+				hasMoreBytes, err = setColorSegment(&c.R, dataBytesChannel, errChannel)
 				if err != nil {
-					logger.Errorf("Error in setting green color segment: %v", err)
+					logger.Errorf("Error in setting red color segment: %v", err)
 					return err
 				}
 				if hasMoreBytes {
 					dataCount++
 				}
 			}
-			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.B) == mask.changeBoolean {
-				hasMoreBytes, err = setColorSegment(&c.B, dataBytesChannel, errChannel)
-				if err != nil {
-					logger.Errorf("Error in setting blue color segment: %v", err)
-					return err
-				}
-				if hasMoreBytes {
-					dataCount++
+			if hasMoreBytes {
+				if helpers.UseMask && bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.G) == mask.changeBoolean {
+					hasMoreBytes, err = setColorSegment(&c.G, dataBytesChannel, errChannel)
+					if err != nil {
+						logger.Errorf("Error in setting green color segment: %v", err)
+						return err
+					}
+					if hasMoreBytes {
+						dataCount++
+					}
+				} else if !helpers.UseMask {
+					hasMoreBytes, err = setColorSegment(&c.G, dataBytesChannel, errChannel)
+					if err != nil {
+						logger.Errorf("Error in setting green color segment: %v", err)
+						return err
+					}
+					if hasMoreBytes {
+						dataCount++
+					}
 				}
 			}
-			if !hasMoreBytes {
-				fmt.Printf("Last encoded pixel - (%v, %v)\n", x, y)
+			if hasMoreBytes {
+				if helpers.UseMask && bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.B) == mask.changeBoolean {
+					hasMoreBytes, err = setColorSegment(&c.B, dataBytesChannel, errChannel)
+					if err != nil {
+						logger.Errorf("Error in setting blue color segment: %v", err)
+						return err
+					}
+					if hasMoreBytes {
+						dataCount++
+					}
+				} else if !helpers.UseMask {
+					hasMoreBytes, err = setColorSegment(&c.B, dataBytesChannel, errChannel)
+					if err != nil {
+						logger.Errorf("Error in setting blue color segment: %v", err)
+						return err
+					}
+					if hasMoreBytes {
+						dataCount++
+					}
+				}
 			}
-
 			//Set the pixel at this location equal to the former data with the last two bits of each channel modified
 			RGBAImage.SetRGBA(x, y, c)
+
+			if !hasMoreBytes {
+				fmt.Printf("Last encoded pixel - (%v, %v)\n", x, y)
+				openSlots := DetermineOpenSlotsWithMask(RGBAImage, bounds.Dx(), bounds.Dy(), mask)
+				fmt.Printf("Number of slots availabe with mask: %v\n", openSlots)
+			}
 		}
 	}
 	fmt.Printf("Picture number - %v - Data count for encoding - %v\n\n", pictureNumber, dataCount)
@@ -290,8 +335,6 @@ func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber u
 	default:
 	}
 
-	// uniqueIDInt := math_rand.Int63n(281474976710654)
-	// uniqueID := uint64(uniqueIDInt)
 	//Set the header area with the size of the data we just embedded into the carrier along with the ID and
 	// the count/order of the photo. The ID comes from the database row number
 	setHeaderInformation(RGBAImage, dataCount, uniquePhotoID, pictureNumber)
@@ -310,7 +353,6 @@ func setHeaderInformation(RGBAImage *image.RGBA, dataCountInt uint32, uniqueIDIn
 	photoIdCount := 0
 	photoNumberCount := 0
 	dataCountBytesCount := 0
-	totalCount := 0
 	//Get the bytes that make up each integer
 	//The photo ID will be 48 bits, but we use a 64-bit variable as that's what the method calls for
 	// 48 unsigned bits:
@@ -323,43 +365,37 @@ func setHeaderInformation(RGBAImage *image.RGBA, dataCountInt uint32, uniqueIDIn
 	// dataCount - 0 - 16,777,215 or 16.777 million
 	dataCountBytes := bit_manipulation.QuartersOfBytes32(dataCountInt)
 
-	bounds := RGBAImage.Bounds()
-	dx := bounds.Dx()
-	dy := bounds.Dy()
-
-	for x := 0; x < dx && totalCount < (totalReservedPixels*3); x++ {
-		for y := 0; y < dy && totalCount < (totalReservedPixels*3); y++ {
-			//For each pixel, get the channels at that pixel
-			//Send each pixel to the set last two bits method to set the last two bits
-			//We have to increment by 3 in order to have the right numbers for indexes in the byte arrays
-			//This will use the first 8 pixels (0-7) in the y column to store the ID, the
-			// next 1 pixel to store the order of the photo, and the last 4 pixels to store
-			// the amount of data stored in this photo in bits
-			c := RGBAImage.RGBAAt(x, y)
-			if y < 8 {
-				c.R = bit_manipulation.SetLastTwoBits(c.B, photoIDBytes[photoIdCount])
-				c.G = bit_manipulation.SetLastTwoBits(c.B, photoIDBytes[photoIdCount+1])
-				c.B = bit_manipulation.SetLastTwoBits(c.B, photoIDBytes[photoIdCount+2])
-				photoIdCount += 3
-			} else if y >= 8 && y < 9 {
-				c.R = bit_manipulation.SetLastTwoBits(c.B, photoNumberBytes[photoNumberCount])
-				c.G = bit_manipulation.SetLastTwoBits(c.B, photoNumberBytes[photoNumberCount+1])
-				c.B = bit_manipulation.SetLastTwoBits(c.B, photoNumberBytes[photoNumberCount+2])
-				photoNumberCount += 3
-			} else if y >= 9 && y < 13 {
-				c.R = bit_manipulation.SetLastTwoBits(c.B, dataCountBytes[dataCountBytesCount])
-				c.G = bit_manipulation.SetLastTwoBits(c.B, dataCountBytes[dataCountBytesCount+1])
-				c.B = bit_manipulation.SetLastTwoBits(c.B, dataCountBytes[dataCountBytesCount+2])
-				dataCountBytesCount += 3
-			}
-			RGBAImage.SetRGBA(x, y, c)
-
-			totalCount += 3
+	x := 0
+	for y := 0; y < totalReservedPixels; y++ {
+		//For each pixel, get the channels at that pixel
+		//Send each pixel to the set last two bits method to set the last two bits
+		//We have to increment by 3 in order to have the right numbers for indexes in the byte arrays
+		//This will use the first 8 pixels (0-7) in the y column to store the ID, the
+		// next 1 pixel to store the order of the photo, and the last 4 pixels to store
+		// the amount of data stored in this photo in bits
+		c := RGBAImage.RGBAAt(x, y)
+		if y < 8 {
+			c.R = bit_manipulation.SetLastTwoBits(c.B, photoIDBytes[photoIdCount])
+			c.G = bit_manipulation.SetLastTwoBits(c.B, photoIDBytes[photoIdCount+1])
+			c.B = bit_manipulation.SetLastTwoBits(c.B, photoIDBytes[photoIdCount+2])
+			photoIdCount += 3
+		} else if y == 8 {
+			c.R = bit_manipulation.SetLastTwoBits(c.B, photoNumberBytes[photoNumberCount])
+			c.G = bit_manipulation.SetLastTwoBits(c.B, photoNumberBytes[photoNumberCount+1])
+			c.B = bit_manipulation.SetLastTwoBits(c.B, photoNumberBytes[photoNumberCount+2])
+			photoNumberCount += 3
+		} else {
+			c.R = bit_manipulation.SetLastTwoBits(c.B, dataCountBytes[dataCountBytesCount])
+			c.G = bit_manipulation.SetLastTwoBits(c.B, dataCountBytes[dataCountBytesCount+1])
+			c.B = bit_manipulation.SetLastTwoBits(c.B, dataCountBytes[dataCountBytesCount+2])
+			dataCountBytesCount += 3
 		}
+		RGBAImage.SetRGBA(x, y, c)
 	}
+
 }
 
-// This function will set the last two bits to the values pulled from the embed image
+// setColorSegment will set the last two bits to the values pulled from the embed image.
 // It takes in the pointer to the byte, a data channel with the bytes in it, and the error channel
 // It returns hasMoreBytes, a simple boolean that checks to see if the dataChannel is empty
 func setColorSegment(colorSegment *byte, dataChannel <-chan byte, errChan <-chan error) (hasMoreBytes bool, err error) {
@@ -371,7 +407,7 @@ func setColorSegment(colorSegment *byte, dataChannel <-chan byte, errChan <-chan
 		}
 		// If we're ok, set the last two bits of this segment to the bits of the embed image pulled from the channel
 		// The byte being passed in as the value in this case is a byte that has the value needed right shifted,
-		// or the equivalent of 0 padding the value so it occupies the last two bits of the byte
+		// or the equivalent of 0 padding the value, so it occupies the last two bits of the byte
 		*colorSegment = bit_manipulation.SetLastTwoBits(*colorSegment, chanByte)
 		// Return true because there is more data left
 		return true, nil
@@ -392,7 +428,7 @@ func readData(reader io.Reader, bytesChannel chan<- byte, errChan chan<- error) 
 	byteArray := make([]byte, 1)
 	for {
 		// Iterate in an unending loop util EOF, where we break
-		// The reader method will populate the byte slice with the amount of bytes allowed until EOF
+		// The reader method will populate the byte slice with the number of bytes allowed until EOF
 		// The method will return the number of bytes populated
 		if _, err := reader.Read(byteArray); err != nil {
 			if errors.Is(err, io.EOF) {
@@ -400,9 +436,8 @@ func readData(reader io.Reader, bytesChannel chan<- byte, errChan chan<- error) 
 				break
 			}
 			// Store the error if we see an error that isn't EOF
-			errChan <- fmt.Errorf("Error reading data %w", err)
+			errChan <- fmt.Errorf("error reading data %w", err)
 		}
-		// For elements in byteArray (just one element) (also we ignore the index, which is the first variable)
 		// The length of the array is 4 elements, take each element and put it into the byte channel
 		// This continues until EOF
 		for _, byteArray := range bit_manipulation.SplitByteIntoQuarters(byteArray[0]) {
@@ -438,26 +473,19 @@ func getImageAsRGBA(reader io.Reader) (*image.RGBA, string, error) {
 // i.e. Mask = 00[10] 0000 - carrierByte = 0001 0000
 // Initially going to just do a nested for loop, but may be a better way to handle this
 func DetermineOpenSlotsWithMask(RGBAImage *image.RGBA, dx, dy int, mask Mask) (openSlotCount int64) {
-	//Eventually we need to have this mask passed in, along with a change ratio
-
-	count := 0
 	for x := 0; x < dx; x++ {
-		for y := 0; y < dy; y++ {
-			// For each pixel, use the mask to check if we can change it or not, skipping the first 13 that are used for
+		for y := totalReservedPixels; y < dy; y++ {
+			// For each pixel, use the mask to check if we can change it or not, skipping the first 0-12 that are used for
 			// the header information
-			if count >= totalReservedPixels {
-				c := RGBAImage.RGBAAt(x, y)
-				if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.R) == mask.changeBoolean {
-					openSlotCount++
-				}
-				if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.B) == mask.changeBoolean {
-					openSlotCount++
-				}
-				if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.G) == mask.changeBoolean {
-					openSlotCount++
-				}
-			} else {
-				count++
+			c := RGBAImage.RGBAAt(x, y)
+			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.R) == mask.changeBoolean {
+				openSlotCount++
+			}
+			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.B) == mask.changeBoolean {
+				openSlotCount++
+			}
+			if bit_manipulation.ReturnMaskDifference(mask.maskInt, mask.multiplier, mask.firstIndex, mask.secondIndex, c.G) == mask.changeBoolean {
+				openSlotCount++
 			}
 		}
 	}
@@ -484,18 +512,18 @@ func generateMaskingInfo(password string) Mask {
 
 	rng := mathrand.New(mathrand.NewSource(int64(seedValue)))
 
-	// Create a range of numbers from 1-30
+	// Create a range of numbers from 1-30, with indexes 0-29
 	var i int16
 	for i = 1; i < 31; i++ {
 		indexRange[i-1] = i
 	}
-	//Generate a random 32 bit number
+	//Generate a random 32-bit number
 	mask := rng.Int31()
 	// This is the largest number that can be multiplied by the data byte value and still not go over signed max
 	// i.e. 8421504 * 255 < 2,147,483,647 (signed 32-bit max)
 	multiplier := rng.Int31n(8421504)
-	//Get a random index from 0-29 (array is 31 spaces, we don't want to compare the last two)
-	randomIndex := rng.Intn(29)
+	//Get a random number from 0-28 (array is 0-29 indexes, we want to exclude the last one for the further step)
+	randomIndex := rng.Intn(28)
 	// Get the first index we'll compare
 	firstIndex := indexRange[randomIndex]
 	// Set the value of the index that we just pulled to the value of the last index
@@ -516,6 +544,7 @@ func generateMaskingInfo(password string) Mask {
 	return Mask{mask, multiplier, firstIndex, secondIndex, changeBoolean}
 }
 
+// hashPassword will take in a password and hash it using the sha256 hashing algorithm
 func hashPassword(password string) []byte {
 	hashFunction := sha256.New()
 	_, err := hashFunction.Write([]byte(password))
@@ -527,6 +556,8 @@ func hashPassword(password string) []byte {
 	return hashFunction.Sum(nil)
 }
 
+// generateNumbersFromHash will take in a hashed password and generate a seed value for the random number generator
+// from the first eight bytes of the hash
 func generateNumbersFromHash(hash []byte) uint64 {
 	subHash := hash[:8]
 

@@ -188,9 +188,5 @@ func ResizeCarrierImage(file io.Reader, UUID string, fileNumber uint8, outputFil
 	if err != nil {
 		logger.Errorf("issues saving the carrier file: %v", err)
 	}
-
-	//Close the file since we've saved it
-	// file.Close()
-
 	return carrierFileName, err
 }
