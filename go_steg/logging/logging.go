@@ -4,6 +4,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// NewLogger creates a new logger with the specified log file if a file is specified
 func NewLogger(logFile string) *zap.SugaredLogger {
 	zap.NewProductionConfig()
 	config := zap.NewProductionConfig()
