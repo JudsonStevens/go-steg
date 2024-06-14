@@ -101,4 +101,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	encodeCmd.PersistentFlags().BoolVarP(
+		&helpers.UseMask,
+		"useMask",
+		"u",
+		false,
+		"Use a discernability mask to embed the embed file into the carrier file(s)")
+	err = encodeCmd.MarkPersistentFlagRequired("useMask")
+	if err != nil {
+		panic(err)
+
+	}
 }

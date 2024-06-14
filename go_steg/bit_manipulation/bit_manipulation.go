@@ -2,7 +2,6 @@ package bit_manipulation
 
 import (
 	"encoding/binary"
-	"unsafe"
 )
 
 // These constants are the max value at each quarter with just those as 1s
@@ -20,7 +19,10 @@ const (
 // will return 1000 0000. Then we shift the bits to the right to move the bits we want to the end. Similarly,
 // for the second quarter of the byte, we use 0011 0000 (48) to get the bits we want, then shift them to the right.
 // That is, 1011 0011 & 0011 0000 (48) will return 0011 0000. Then we shift the bits to the right to move the bits
-// to the end again. We do this for the third and fourth quarters of the byte as well.
+// to the end again. We do this for the third and fourth quarters of the byte as well. The purpose of this is to
+// generate bytes that contain the data we want to store as the last two bits. So for the above example, we would end
+// up with [0000 0010, 0000 0011, 0000 0000, 0000 0011]. The last two bits of those bytes are the data we want
+// to store.
 //
 // Some reading on the bitwise AND operator (and others):
 // - https://yourbasic.org/golang/operators/
@@ -29,9 +31,8 @@ func SplitByteIntoQuarters(b byte) [4]byte {
 	return [4]byte{b & firstQuarterOfByteMax >> 6, b & secondQuarterOfByteMax >> 4, b & thirdQuarterOfByteMax >> 2, b & fourthQuarterOfByteMax}
 }
 
-// clearLastTwoBits will clear all bits (set to 0) except the last two bits
-//
-//	We do this with a mask of 1111 1100; i.e. 0100 1101 & 1111 1100 -> 0100 1100
+// clearLastTwoBits will clear the last two bits of the passed in byte
+// We do this with a mask of 1111 1100, i.e., 0100 1101 & 1111 1100 -> 0100 1100
 func clearLastTwoBits(b byte) byte {
 	return b & byte(252)
 }
@@ -43,7 +44,7 @@ func clearLastTwoBits(b byte) byte {
 //
 // For example:
 // - We start with a byte of 0100 1101
-// - We want to set the last two bits to 11
+// - Our value to set is 0000 0011
 // - We first clear the last two bits of the byte, so we have 0100 1100
 // - Then we use the OR operator to set the last two bits to 11
 // - 0100 1100 | 0000 0011 -> 0100 1111
@@ -79,27 +80,31 @@ func ConstructByteFromQuarters(first, second, third, fourth byte) byte {
 func ReturnMaskDifference(maskInt int32, multiplier int32, firstIndex int16, secondIndex int16, colorInt uint8) bool {
 	//First convert everything to uint with an unsafe pointer
 	//https://old.reddit.com/r/golang/comments/29iir54/convert_from_int32_to_uint32/cilcok1
-	uMaskInt, uMultiplier := *(*uint32)(unsafe.Pointer(&maskInt)), *(*uint32)(unsafe.Pointer(&multiplier))
-	uFirstIndex, uSecondIndex := *(*uint16)(unsafe.Pointer(&firstIndex)), *(*uint16)(unsafe.Pointer(&secondIndex))
+	//uMaskInt, uMultiplier := *(*uint32)(unsafe.Pointer(&maskInt)), *(*uint32)(unsafe.Pointer(&multiplier))
+	//uFirstIndex, uSecondIndex := *(*uint16)(unsafe.Pointer(&firstIndex)), *(*uint16)(unsafe.Pointer(&secondIndex))
+	uMaskInt, uMultiplier := uint32(maskInt), uint32(multiplier)
+	uFirstIndex, uSecondIndex := uint16(firstIndex), uint16(secondIndex)
 
 	// Clear out the last two bits to make sure the changes in data don't bite us - since we are multiplying
 	// the data integer we could end up with different results - i.e. if it was 198 before, now it's 200,
 	// and our multiplier is 10, then we would be comparing 1980 initially and 2000 after, which wouldn't
 	// give us the correct results.
 	// This could happen if this byte was used to store data from the embed image.
+	// Clearing the last two bites means regardless of any scenario, the number used should be the same.
 	clearedDataByte := clearLastTwoBits(colorInt)
 
 	// Set colorInt back to the clearedDataByte value but as an uint8,
-	// so we can multiply this with the multiplier
+	// so we can multiply this with the multiplier.
+	// A byte is an alias for uint8 in Golang.
 	colorInt = clearedDataByte
 
 	// Multiply the colorInt with the multiplier which gives us a 32-bit number.
 	// The multiplier is maxed at 8421504 so that we don't go over signed 32-bit max. That is,
 	// 255 * 8421504 = 2,147,483,520, and we don't go over 2,147,483,647.
-	// TODO: Investigate whether we can actually use unsigned 32-bit mas as the limit
-	multipliedColorInt := *(*uint32)(unsafe.Pointer(&colorInt)) * uMultiplier
-
-	// MaxIndex of a 32-bit number is 31 for 0 indexed
+	// TODO: Investigate whether we can actually use unsigned 32-bit max as the limit
+	//multipliedColorInt := *(*uint32)(unsafe.Pointer(&colorInt)) * uMultiplier
+	multipliedColorInt := uint32(colorInt) * uMultiplier
+	// MaxIndex of a 32-bit number in a byte slice is 31 for 0 indexed, 16 bits to match the incoming indexes
 	var maxIndex uint16 = 31
 
 	// Run XOR on the colorInt - this will set the bits to 1 if the bits of the two numbers are different.

@@ -1,8 +1,11 @@
 package image_processing
 
-import "testing"
+import (
+	"go-steg/cli/helpers"
+	"testing"
+)
 
-func TestMultiCarrierEncodeByFileNames(t *testing.T) {
+func TestEncodeByFileNames(t *testing.T) {
 	type args struct {
 		carrierFileNames []string
 		dataFileName     string
@@ -16,20 +19,21 @@ func TestMultiCarrierEncodeByFileNames(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "Test MultiCarrierEncodeByFileNames is Successful",
+			name: "Test EncodeByFileNames",
 			args: args{
-				carrierFileNames: []string{"../test_files/carrierPhoto.png"},
-				dataFileName:     "../test_files/embedPhoto.png",
+				carrierFileNames: []string{"../../go_steg/pics/carrierPhoto.png"},
+				dataFileName:     "../../go_steg/pics/embedPhoto.png",
 				uniquePhotoID:    1,
-				password:         "password",
-				outputFileDir:    "../test_files",
+				password:         "testPassword",
+				outputFileDir:    "../../go_steg/pics/testPhotoOutput",
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := MultiCarrierEncodeByFileNames(tt.args.carrierFileNames, tt.args.dataFileName, tt.args.uniquePhotoID, tt.args.password, tt.args.outputFileDir); (err != nil) != tt.wantErr {
-				t.Errorf("MultiCarrierEncodeByFileNames() error = %v, wantErr %v", err, tt.wantErr)
+			helpers.UseMask = true
+			if err := EncodeByFileNames(tt.args.carrierFileNames, tt.args.dataFileName, tt.args.uniquePhotoID, tt.args.password, tt.args.outputFileDir); (err != nil) != tt.wantErr {
+				t.Errorf("EncodeByFileNames() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
