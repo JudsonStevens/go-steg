@@ -38,9 +38,6 @@ var rootCmd = &cobra.Command{
 	Long: `Go-steg uses Least Bit Steganography to hide information in images. It can be used to
 hide photos in other photos, using a method that is very resistant if not impervious to typical
 techniques of stegoanalisys. `,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -60,10 +57,6 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.app.yaml)")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 // initConfig reads in config file and ENV variables if set.

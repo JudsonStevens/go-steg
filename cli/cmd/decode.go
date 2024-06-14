@@ -41,7 +41,7 @@ var decodeCmd = &cobra.Command{
 the carrier photos to produce the "embed" photo. The password will be used to regenerate the mask
 and decode the information from the carrier photos.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := helpers.ValidateIsValidDirectory(outputFileDir)
+		err := helpers.ValidateIsValidDirectory(decodeOutputFileDir)
 		if err != nil {
 			panic(err)
 		}
@@ -85,20 +85,32 @@ func init() {
 		panic(err)
 	}
 
-	encodeCmd.PersistentFlags().StringVarP(
+	decodeCmd.PersistentFlags().StringVarP(
 		&decodeOutputFileDir,
 		"outputFileDir",
 		"o",
 		"",
 		"The directory to output the resulting files to. This must be either a valid relative path or "+
 			"a valid absolute path")
-	err = encodeCmd.MarkPersistentFlagRequired("outputFileDir")
+	err = decodeCmd.MarkPersistentFlagRequired("outputFileDir")
 	if err != nil {
 		panic(err)
 	}
 
-	err = encodeCmd.PersistentFlags().SetAnnotation("outputFileDir", cobra.BashCompSubdirsInDir, []string{})
+	err = decodeCmd.PersistentFlags().SetAnnotation("outputFileDir", cobra.BashCompSubdirsInDir, []string{})
 	if err != nil {
 		panic(err)
+	}
+
+	encodeCmd.PersistentFlags().BoolVarP(
+		&helpers.UseMask,
+		"useMask",
+		"u",
+		false,
+		"Use a discernability mask to embed the embed file into the carrier file(s)")
+	err = encodeCmd.MarkPersistentFlagRequired("useMask")
+	if err != nil {
+		panic(err)
+
 	}
 }
