@@ -502,6 +502,9 @@ func DetermineOpenSlotsWithMask(RGBAImage *image.RGBA, dx, dy int, mask Mask) (o
 // and two random numbers between 0 and 29 to serve as the index values to check for the mask.
 // These index values will determine what indexes in the 32-bit mask will be used to determine
 // if the data byte value will be changed or not.
+//
+// Only in situations where the change boolean matches the shifted index bits will the data byte have its value
+// added to the carrier byte.
 func generateMaskingInfo(password string) Mask {
 	//Make a slice of int16 numbers for our index compare
 	var indexRange = make([]int16, 30)
