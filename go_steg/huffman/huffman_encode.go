@@ -24,7 +24,7 @@ type Node struct {
 // SortNodes is a type defined to give us a slice to store the pointers for each node
 type SortNodes []*Node
 
-// Len simply returns the length of the Node slice - the type in the paran
+// Len simply returns the length of the Node slice - the type in the parameter
 // before the method name allows us to call that method on the "class" SortNodes
 // like SortNodes.Len()
 // We define these in order to let the sort package use them with the context
@@ -77,19 +77,20 @@ func BuildPreSortedTree(leaves []*Node) *Node {
 
 		//This portion of the function will insert the new node into the slice
 		// and keep it sorted correctly
-		//Set ls equal to the leaves slice starting at the second index
+		//Set ls equal to the leaf slice starting at the second index
 		ls := leaves[2:]
-		//Set the index variable equal to the return of the Search function
+		//Set the index variable equal to the return of the Search function.
 		//This function will return the index of the value that first matches the statement
-		// inside the function. Basically we are finding the first node in the slice
-		// that has a count greater than or equal to our current parentCount. In that case
-		// we will insert into that index
+		// inside the function.
+		//Basically, we are finding the first node in the slice
+		// that has a count greater than or equal to our current parentCount.
+		//In that case, we will insert into that index
 		idx := sort.Search(len(ls), func(i int) bool { return ls[i].Count >= parentCount })
-		//We increase idx by 2 in order to be able to insert correctly later
+		//We increase idx by 2 to be able to insert correctly later
 		idx += 2
 
-		//Copy will copy the source (leaves[2:idx]) to the destination (leaves[1:]) and copy
-		// over those indexes while maintaining all the indexes after
+		//Copy will copy the source (leaves[2:idx]) to the destination (leaves[1: ]) and copy
+		// over those indexes while maintaining all the indexes after.
 		//For example - copy([1, 2, 3, 4], [3, 4]) => [1, 3, 4, 4]
 		copy(leaves[1:], leaves[2:idx])
 		leaves[idx-1] = parent

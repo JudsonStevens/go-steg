@@ -3,9 +3,9 @@ package image_processing
 import (
 	"encoding/binary"
 	"fmt"
+	"go-steg/cli/helpers"
 	"go-steg/go_steg/bit_manipulation"
 	"go-steg/go_steg/logging"
-	"go-steg/cli/helpers"
 	"image"
 	"io"
 	"os"
@@ -103,7 +103,6 @@ func Decode(carrier io.Reader, result io.Writer, mask Mask) error {
 	resultBytes := make([]byte, 0, 100000)
 
 	dataCount := extractDataCount(RGBAImage)
-
 	fmt.Printf("Data count for this carrier: %v\n", dataCount)
 
 	if helpers.UseMask {
@@ -168,6 +167,7 @@ func Decode(carrier io.Reader, result io.Writer, mask Mask) error {
 	return nil
 }
 
+// align ensures that the slice is divisible by 4, or in other words, an aliquot of 4.
 func align(dataBytes []byte) []byte {
 	switch len(dataBytes) % 4 {
 	case 1:
@@ -180,28 +180,20 @@ func align(dataBytes []byte) []byte {
 	return dataBytes
 }
 
+// extractDataCount extracts the data count from the carrier image.
 func extractDataCount(RGBAImage *image.RGBA) int {
-	//We initialize a slice that's 12 bytes long, to be able to fit the  bits we have to capture
-	// since there are 2 bits per byte from the picture
+	//We initialize a slice that's 12 bytes long, to be able to fit the bits we have to capture
+	// since there are 2 bits per byte/channel from the picture
 	dataCountBytes := make([]byte, 0, 12)
 
-	dx := RGBAImage.Bounds().Dx()
-	dy := RGBAImage.Bounds().Dy()
-
-	count := 0
-
 	//We want to start on the y-axis after the photoID and the photoNumber embedded information
-	//The minus 1 is since we are zero indexed
-	for x := 0; x < dx && count < dataSizeHeaderReservedPixels; x++ {
-		for y := photoIDHeaderReservedPixels + photoNumberHeaderReservedPixels; y < dy && count < dataSizeHeaderReservedPixels; y++ {
-			c := RGBAImage.RGBAAt(x, y)
-			dataCountBytes = append(dataCountBytes, bit_manipulation.GetLastTwoBits(c.R), bit_manipulation.GetLastTwoBits(c.G), bit_manipulation.GetLastTwoBits(c.B))
-			count++
-		}
+	x := 0
+	for y := photoIDHeaderReservedPixels + photoNumberHeaderReservedPixels; y < totalReservedPixels; y++ {
+		c := RGBAImage.RGBAAt(x, y)
+		dataCountBytes = append(dataCountBytes, bit_manipulation.GetLastTwoBits(c.R), bit_manipulation.GetLastTwoBits(c.G), bit_manipulation.GetLastTwoBits(c.B))
 	}
 
-	// dataCountBytes = append(dataCountBytes, byte(0))
-
+	// Empty byte at the end to make the LittleEndian conversion work
 	var bs = []byte{
 		bit_manipulation.ConstructByteFromQuartersAsSlice(dataCountBytes[:4]),
 		bit_manipulation.ConstructByteFromQuartersAsSlice(dataCountBytes[4:8]),
@@ -212,26 +204,16 @@ func extractDataCount(RGBAImage *image.RGBA) int {
 	return int(binary.LittleEndian.Uint32(bs))
 }
 
+// extractPhotoID extracts the photo ID from the carrier image.
 func extractPhotoID(RGBAImage *image.RGBA) int {
-	photoIDBytes := make([]byte, 24)
-
-	dx := RGBAImage.Bounds().Dx()
-	dy := RGBAImage.Bounds().Dy()
-
-	count := 0
-
-	for x := 0; x < dx && count < photoIDHeaderReservedPixels; x++ {
-		for y := 0; y < dy && count < photoIDHeaderReservedPixels; y++ {
-			c := RGBAImage.RGBAAt(x, y)
-			photoIDBytes = append(photoIDBytes, bit_manipulation.GetLastTwoBits(c.R), bit_manipulation.GetLastTwoBits(c.G), bit_manipulation.GetLastTwoBits(c.B))
-			count++
-		}
+	photoIDBytes := make([]byte, 0, 24)
+	x := 0
+	for y := 0; y < photoIDHeaderReservedPixels; y++ {
+		c := RGBAImage.RGBAAt(x, y)
+		photoIDBytes = append(photoIDBytes, bit_manipulation.GetLastTwoBits(c.R), bit_manipulation.GetLastTwoBits(c.G), bit_manipulation.GetLastTwoBits(c.B))
 	}
-	// Not sure why this was here, it seems to just be adding one last byte of 0 - may need to do that if
-	// the number doesn't come out to the total amount of bytes in the variable type
-	//The little endian function should be able to return the number even if it isn't as long as it's supposed to be
-	// photoIDBytes = append(photoIDBytes, byte(0), byte(0), byte(0))
 
+	// Empty bytes at the end to make the LittleEndian conversion work
 	var bs = []byte{
 		bit_manipulation.ConstructByteFromQuartersAsSlice(photoIDBytes[:4]),
 		bit_manipulation.ConstructByteFromQuartersAsSlice(photoIDBytes[4:8]),
@@ -246,25 +228,18 @@ func extractPhotoID(RGBAImage *image.RGBA) int {
 	return int(binary.LittleEndian.Uint64(bs))
 }
 
+// extractPhotoNumber extracts the photo number from the carrier image.
 func extractPhotoNumber(RGBAImage *image.RGBA) int {
-	photoNumberBytes := make([]byte, 4)
-
-	dx := RGBAImage.Bounds().Dx()
-	dy := RGBAImage.Bounds().Dy()
-
-	count := 0
-
-	for x := 0; x < dx && count < photoNumberHeaderReservedPixels; x++ {
-		for y := photoIDHeaderReservedPixels; y < dy && count < photoNumberHeaderReservedPixels; y++ {
-			c := RGBAImage.RGBAAt(x, y)
-			photoNumberBytes = append(photoNumberBytes, bit_manipulation.GetLastTwoBits(c.R), bit_manipulation.GetLastTwoBits(c.G), bit_manipulation.GetLastTwoBits(c.B))
-			count++
-		}
+	photoNumberBytes := make([]byte, 0, 4)
+	x := 0
+	for y := photoIDHeaderReservedPixels; y < photoIDHeaderReservedPixels+photoNumberHeaderReservedPixels; y++ {
+		c := RGBAImage.RGBAAt(x, y)
+		photoNumberBytes = append(photoNumberBytes, bit_manipulation.GetLastTwoBits(c.R), bit_manipulation.GetLastTwoBits(c.G), bit_manipulation.GetLastTwoBits(c.B))
 	}
-	//This one only has 3 bytes worth of data, so we pad it with a zero byte to allow the quarters method to work
+	// Add another byte on the end to make the byte slice work with the construct method
 	photoNumberBytes = append(photoNumberBytes, byte(0))
 
-	var bs = []byte{bit_manipulation.ConstructByteFromQuartersAsSlice(photoNumberBytes)}
+	var bs = []byte{bit_manipulation.ConstructByteFromQuartersAsSlice(photoNumberBytes), byte(0), byte(0), byte(0)}
 
-	return int(binary.LittleEndian.Uint64(bs))
+	return int(binary.LittleEndian.Uint16(bs))
 }

@@ -41,7 +41,7 @@ func ResizeEmbedImage(file io.Reader, UUID string, outputFileDir string) (fileNa
 	dx := RGBAImage.Bounds().Dx()
 	dy := RGBAImage.Bounds().Dy()
 
-	//Create a new NRGBA image to store the resized image
+	//Create a new RGBA image to store the resized image
 	//TODO: Make sure we can't just resize into a regular RGBA?
 	var resizedNRGBAImage *image.NRGBA
 	if dx > instagramHalfMaxWidth && dy > instagramHalfMaxHeight {
@@ -54,7 +54,7 @@ func ResizeEmbedImage(file io.Reader, UUID string, outputFileDir string) (fileNa
 		dy = bounds.Dy()
 
 		//Create a blank RGBA image to draw the resized image into
-		RGBAImage = image.NewNRGBA(image.Rect(0, 0, dx, dy))
+		RGBAImage = image.NewRGBA(image.Rect(0, 0, dx, dy))
 		draw.Draw(RGBAImage, RGBAImage.Bounds(), resizedNRGBAImage, bounds.Min, draw.Src)
 
 	} else if dy > instagramHalfMaxHeight {
@@ -67,7 +67,7 @@ func ResizeEmbedImage(file io.Reader, UUID string, outputFileDir string) (fileNa
 		dy = bounds.Dy()
 
 		//Create a blank RGBA image to draw the resized image into
-		RGBAImage = image.NewNRGBA(image.Rect(0, 0, dx, dy))
+		RGBAImage = image.NewRGBA(image.Rect(0, 0, dx, dy))
 		draw.Draw(RGBAImage, RGBAImage.Bounds(), resizedNRGBAImage, bounds.Min, draw.Src)
 	} else if dx > instagramHalfMaxWidth {
 		//Resize the image
@@ -79,7 +79,7 @@ func ResizeEmbedImage(file io.Reader, UUID string, outputFileDir string) (fileNa
 		dy = bounds.Dy()
 
 		//Create a blank RGBA image to draw the resized image into
-		RGBAImage = image.NewNRGBA(image.Rect(0, 0, dx, dy))
+		RGBAImage = image.NewRGBA(image.Rect(0, 0, dx, dy))
 		draw.Draw(RGBAImage, RGBAImage.Bounds(), resizedNRGBAImage, bounds.Min, draw.Src)
 	}
 
@@ -99,8 +99,9 @@ func ResizeEmbedImage(file io.Reader, UUID string, outputFileDir string) (fileNa
 	return embedFileName, err
 }
 
-// ResizeCarrierImage will resize a carrier image to something equal to or smaller than 1080x1350
-// which is the Instagram max size for the 4:5 ratio
+// ResizeCarrierImage will resize a carrier image to something equal to or smaller than 1080x1350.
+//
+// This is the Instagram max size for the 4:5 ratio.
 func ResizeCarrierImage(file io.Reader, UUID string, fileNumber uint8, outputFileDir string) (fileName string, err error) {
 	//Get the image from the file passed in
 	RGBAImage, _, err := getImageAsRGBA(file)
@@ -144,7 +145,7 @@ func ResizeCarrierImage(file io.Reader, UUID string, fileNumber uint8, outputFil
 	dx = bounds.Dx()
 	dy = bounds.Dy()
 	//Create a blank RGBA image to draw the resized image into
-	RGBAImage = image.NewNRGBA(image.Rect(0, 0, dx, dy))
+	RGBAImage = image.NewRGBA(image.Rect(0, 0, dx, dy))
 	draw.Draw(RGBAImage, RGBAImage.Bounds(), resizedNRGBAImage, bounds.Min, draw.Src)
 
 	// Encode the file as a png and save it to the file name

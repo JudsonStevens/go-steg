@@ -181,13 +181,13 @@ func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Write
 	fmt.Println("Masking info: ", mask)
 
 	//Initialize a variable for the count since we need it to be an uint16
-	var photoCount uint16
+	var photoNumber uint16
 	//Use another loop to actually encode everything
 	for i := 0; i < len(carriers); i++ {
-		if err := Encode(carriers[i], dataChunks[i], results[i], photoCount, uniquePhotoID, mask); err != nil {
+		if err := Encode(carriers[i], dataChunks[i], results[i], photoNumber, uniquePhotoID, mask); err != nil {
 			return fmt.Errorf("error encoding chunk with index %d: %w", i, err)
 		}
-		photoCount++
+		photoNumber++
 	}
 	return err
 }
@@ -203,7 +203,7 @@ func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Write
 // and so we change the last two bits of the channel.
 // That means we use this channel/byte to hide information - if the data byte is 0000 0011, then our channel
 // goes from 0010 0000 to 0010 0011
-func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber uint16, uniquePhotoID uint64, mask Mask) error {
+func Encode(carrier io.Reader, data io.Reader, result io.Writer, photoNumber uint16, uniquePhotoID uint64, mask Mask) error {
 	// Open the carrier image as an RGBA image, along with getting the format of the carrier image
 	RGBAImage, format, err := getImageAsRGBA(carrier)
 	if err != nil {
@@ -323,7 +323,7 @@ func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber u
 			}
 		}
 	}
-	fmt.Printf("Picture number - %v - Data count for encoding - %v\n\n", pictureNumber, dataCount)
+	fmt.Printf("Picture number - %v - Data count for encoding - %v\n\n", photoNumber, dataCount)
 	//If we still have bytes left in the channel, we weren't able to fill the carrier file
 	// TODO: investigate the default line here
 	select {
@@ -337,7 +337,7 @@ func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber u
 
 	//Set the header area with the size of the data we just embedded into the carrier along with the ID and
 	// the count/order of the photo. The ID comes from the database row number
-	setHeaderInformation(RGBAImage, dataCount, uniquePhotoID, pictureNumber)
+	setHeaderInformation(RGBAImage, dataCount, uniquePhotoID, photoNumber)
 
 	//If the format we get isn't either png or jpeg, return an error
 	switch format {
@@ -348,7 +348,7 @@ func Encode(carrier io.Reader, data io.Reader, result io.Writer, pictureNumber u
 	}
 }
 
-func setHeaderInformation(RGBAImage *image.RGBA, dataCountInt uint32, uniqueIDInt uint64, photoNumberInt uint16) {
+func setHeaderInformation(RGBAImage *image.RGBA, dataCount uint32, uniqueID uint64, photoNumber uint16) {
 	// Set our counts to 0
 	photoIdCount := 0
 	photoNumberCount := 0
@@ -357,13 +357,13 @@ func setHeaderInformation(RGBAImage *image.RGBA, dataCountInt uint32, uniqueIDIn
 	//The photo ID will be 48 bits, but we use a 64-bit variable as that's what the method calls for
 	// 48 unsigned bits:
 	// photoID - 0 - 281,474,976,710,655 or 281.474 trillion
-	photoIDBytes := bit_manipulation.QuartersOfBytes64(uniqueIDInt)
+	photoIDBytes := bit_manipulation.QuartersOfBytes64(uniqueID)
 	//The number is only 6 bits, but the lowest we can go for the PutUint method is 16
 	// photoNumber - 0 - 63
-	photoNumberBytes := bit_manipulation.QuartersOfBytes16(photoNumberInt)
+	photoNumberBytes := bit_manipulation.QuartersOfBytes16(photoNumber)
 	//The data count can be up to 24 bits long, and we store it in a 32-bit unsigned integer
 	// dataCount - 0 - 16,777,215 or 16.777 million
-	dataCountBytes := bit_manipulation.QuartersOfBytes32(dataCountInt)
+	dataCountBytes := bit_manipulation.QuartersOfBytes32(dataCount)
 
 	x := 0
 	for y := 0; y < totalReservedPixels; y++ {
