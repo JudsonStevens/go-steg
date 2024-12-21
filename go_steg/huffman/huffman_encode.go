@@ -46,57 +46,80 @@ func BuildTree(leaves []*Node) *Node {
 	return BuildPreSortedTree(leaves)
 }
 
-// BuildPreSortedTree will return a Huffman tree after the leaves have been sorted
-// by the method above. Since the slice of Nodes is already sorted by Count,
-// we know that we are starting with the smallest elements by count. That lets
-// us start building our tree from smallest to largest
-// For example - [1, 2, 4, 7, 8] -> grab the first two frequencies (the values of the node)
+// BuildPreSortedTree creates a Huffman tree from a pre-sorted slice of leaf nodes.
+// The nodes must be sorted by their Count value in ascending order.
+//
+// The algorithm works by repeatedly:
+// 1. Taking the two nodes with lowest counts
+// 2. Creating a parent node with those as children
+// 3. Inserting the parent back into the sorted list
+//
+// Example: For leaf nodes with counts [1, 2, 4, 7, 8], the tree would look like:
 //
 //	       22
 //	      /  \
 //	     14   8
 //	    / \
-//	  3     11
-//	 / \   /  \
-//	1   2 4    7
+//	   3   11
+//	  / \  / \
+//	 1   2 4  7
 //
-// In this instance, if I wanted to get the value of 011, that would be 7 - start at 22, 0 means go left
-// arriving at 14, 1 means go right arriving at 11, and 1 means go right, arriving at 7
+// To find a value, traverse the tree using 0 for left, 1 for right.
+// Example: The code "011" leads to value 7 (left, right, right)
+//
+// Real-world example using the word "hello":
+// Character frequencies: (h:1, e:1, l:2, o:1)
+// Sorted by frequency: [h:1, e:1, o:1, l:2]
+// Results in tree:
+//	        5
+//	       / \
+//	      2   3
+//	     /     \
+//	    h     2(l,l)
+//	   / \
+//	  e   o
+//
+// Resulting codes:
+// h = 00
+// e = 010
+// o = 011
+// l = 1
 func BuildPreSortedTree(leaves []*Node) *Node {
 	if len(leaves) == 0 {
 		return nil
 	}
 
 	for len(leaves) > 1 {
-		// Start with the first and second elements
-		left, right := leaves[0], leaves[1]
-		parentCount := left.Count + right.Count
-		parent := &Node{Left: left, Right: right, Count: parentCount}
-		left.Parent = parent
-		right.Parent = parent
+		// Take the two lowest-count nodes as children
+		leftChild := leaves[0]
+		rightChild := leaves[1]
 
-		//This portion of the function will insert the new node into the slice
-		// and keep it sorted correctly
-		//Set ls equal to the leaf slice starting at the second index
+		// Create their parent node, combining their counts
+		parentNode := &Node{
+			Left:  leftChild,
+			Right: rightChild,
+			Count: leftChild.Count + rightChild.Count,
+		}
+
+		// Link children back to their parent
+		leftChild.Parent = parentNode
+		rightChild.Parent = parentNode
+
+		// Find where to insert the new parent node to maintain sorted order:
+		// 1. Look at remaining nodes (index 2 onwards)
 		ls := leaves[2:]
-		//Set the index variable equal to the return of the Search function.
-		//This function will return the index of the value that first matches the statement
-		// inside the function.
-		//Basically, we are finding the first node in the slice
-		// that has a count greater than or equal to our current parentCount.
-		//In that case, we will insert into that index
-		idx := sort.Search(len(ls), func(i int) bool { return ls[i].Count >= parentCount })
-		//We increase idx by 2 to be able to insert correctly later
-		idx += 2
+		// 2. Find first position where node count >= parent count
+		idx := sort.Search(len(ls), func(i int) bool { return ls[i].Count >= parentNode.Count })
+		idx += 2 // Adjust index to account for the two nodes we removed
 
-		//Copy will copy the source (leaves[2:idx]) to the destination (leaves[1: ]) and copy
-		// over those indexes while maintaining all the indexes after.
-		//For example - copy([1, 2, 3, 4], [3, 4]) => [1, 3, 4, 4]
+		// Shift existing nodes and insert parent to maintain sorted order
 		copy(leaves[1:], leaves[2:idx])
-		leaves[idx-1] = parent
+		leaves[idx-1] = parentNode
+		// Remove the first node (we used two nodes to make one)
 		leaves = leaves[1:]
 	}
-	//Once we're done building the tree, the last node will be the root node
+
+	// After combining all nodes, only the root remains
 	return leaves[0]
 }
 

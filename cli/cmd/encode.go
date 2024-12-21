@@ -22,9 +22,10 @@ THE SOFTWARE.
 */
 
 import (
-	"github.com/spf13/cobra"
 	"go-steg/cli/helpers"
 	"go-steg/go_steg/image_processing"
+
+	"github.com/spf13/cobra"
 )
 
 var embedFileName string
@@ -34,13 +35,15 @@ var encodeOutputFileDir string
 
 // encodeCmd represents the encode command
 var encodeCmd = &cobra.Command{
-	Use:   "encode",
+	Use:   "encode -e [embed_file] -c [carrier_files...] -p [password] -o [output_dir] -u",
 	Short: "Embed a photo into another photo or group of photos",
 	Long: `Given an "embed" photo, a single or list of "carrier" photos, and a password, 
 embed the "embed" photo into the "carrier" photo(s) and output the resulting altered files with the mask information. 
 This method will use the passed in password to attempt to generate a mask to use to secure the embedded information.
 Depending on the mask generated, we may need to generate a new mask to use to secure the embedded information,
-as the size of embed information may be larger than the mask can handle.`,
+as the size of embed information may be larger than the mask can handle.
+Example:
+go-steg encode -e [embed_file] -c [carrier_files...] -p [password] -o [output_dir] -u`,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := helpers.ValidateIsValidDirectory(encodeOutputFileDir)
 		if err != nil {

@@ -8,12 +8,13 @@ import (
 	"go-steg/cli/helpers"
 	"go-steg/go_steg/bit_manipulation"
 	"go-steg/go_steg/logging"
-	"go.uber.org/zap"
 	"image"
 	"image/draw"
 	mathrand "math/rand"
 	"path/filepath"
 	"strings"
+
+	"go.uber.org/zap"
 
 	"bytes"
 	// Blank to justify
@@ -32,6 +33,55 @@ type Mask struct {
 	firstIndex    int16
 	secondIndex   int16
 	changeBoolean bool
+}
+
+type EncodingError struct {
+	Type    string
+	Message string
+	Err     error
+}
+
+func (e *EncodingError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %s (%v)", e.Type, e.Message, e.Err)
+	}
+	return fmt.Sprintf("%s: %s", e.Type, e.Message)
+}
+
+// Error types
+var (
+	ErrCarrierTooSmall = &EncodingError{
+		Type:    "CarrierSizeError",
+		Message: "carrier image dimensions too small for data",
+	}
+	ErrInvalidFormat = &EncodingError{
+		Type:    "FormatError",
+		Message: "unsupported carrier image format, must be PNG or JPEG",
+	}
+	ErrDataTooLarge = &EncodingError{
+		Type:    "DataSizeError",
+		Message: "data file too large for carrier image capacity",
+	}
+	ErrHeaderSpace = &EncodingError{
+		Type:    "HeaderError",
+		Message: "insufficient space for header information",
+	}
+	ErrMaskGeneration = &EncodingError{
+		Type:    "MaskError",
+		Message: "error generating steganographic mask",
+	}
+	ErrIOOperation = &EncodingError{
+		Type:    "IOError",
+		Message: "error during file read/write operation",
+	}
+)
+
+func wrapError(err error, errType *EncodingError, context string) error {
+	return &EncodingError{
+		Type:    errType.Type,
+		Message: fmt.Sprintf("%s: %s", errType.Message, context),
+		Err:     err,
+	}
 }
 
 func init() {

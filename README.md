@@ -66,6 +66,12 @@ by <a href="https://unsplash.com/fr/@danieljschwarz?utm_source=unsplash&utm_medi
 Daniel J. Schwarz</a>
 on <a href="https://unsplash.com/?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Unsplash</a>
 
+## Resources
+- [Hiding Images in Plain Sight: Deep Steganography](https://towardsdatascience.com/hiding-images-in-plain-sight-deep-steganography-8d4f6e5e8f2f)
+- [Protecting Information with Subcodstanography](https://www.researchgate.net/publication/313687159_Protecting_Information_with_Subcodstanography)
+- [Indiscernability Mask Key for Image Steganography](https://www.researchgate.net/publication/341300833_Indiscernibility_Mask_Key_for_Image_Steganography)
+- [Data Masking: A New Approach for Steganography](https://www.researchgate.net/publication/220540605_Data_Masking_A_New_Approach_for_Steganography)
+
 ## Notes
 
 - Use `go install` to install the package.
