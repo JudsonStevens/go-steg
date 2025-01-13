@@ -587,11 +587,9 @@ func generateMaskingInfo(password string) Mask {
 	randomIndex = rng.Intn(28)
 	secondIndex := indexRange[randomIndex]
 	// Randomly decide the boolean value that we'll use to determine if we change the data byte value or not
-	var changeBoolean bool
+	var changeBoolean bool = false
 	if rng.Intn(2) == 1 {
 		changeBoolean = true
-	} else {
-		changeBoolean = false
 	}
 
 	return Mask{mask, multiplier, firstIndex, secondIndex, changeBoolean}
