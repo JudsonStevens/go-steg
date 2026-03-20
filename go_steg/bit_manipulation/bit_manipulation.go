@@ -119,50 +119,18 @@ func ConstructByteFromQuarters(first, second, third, fourth byte) byte {
 	return (((first << 6) | (second << 4)) | third<<2) | fourth
 }
 
-// ReturnMaskDifference will take in two bytes and identify if the data should be read or not by determining
-// if the data byte indexes are different from the mask byte indexes.
-//
-// The XOR operator will only set the bit to 1 if the bits are different. We use the XOR operator
-// to set all bits that are different to 1, then rotate the result and use the AND operator to zero
-// out all the bits besides the least significant bit. If that bit is 1, then the data bit was different
-// from the bit in the mask. We do that for both indexes, and then return true if both of them are 1 (i.e.,
-// the data bit was different from both bits in the mask).
-func ReturnMaskDifference(maskInt int32, multiplier int32, firstIndex int16, secondIndex int16, colorInt uint8) bool {
-	//First convert everything to uint with an unsafe pointer
-	//https://old.reddit.com/r/golang/comments/29iir54/convert_from_int32_to_uint32/cilcok1
-	//uMaskInt, uMultiplier := *(*uint32)(unsafe.Pointer(&maskInt)), *(*uint32)(unsafe.Pointer(&multiplier))
-	//uFirstIndex, uSecondIndex := *(*uint16)(unsafe.Pointer(&firstIndex)), *(*uint16)(unsafe.Pointer(&secondIndex))
+// ReturnMaskDifferenceN is the variable-bit-depth version of ReturnMaskDifference.
+// It clears the last bitDepth bits of colorInt instead of a hardcoded 2.
+func ReturnMaskDifferenceN(maskInt int32, multiplier int32, firstIndex int16, secondIndex int16, colorInt uint8, bitDepth int) bool {
 	uMaskInt, uMultiplier := uint32(maskInt), uint32(multiplier)
 	uFirstIndex, uSecondIndex := uint16(firstIndex), uint16(secondIndex)
 
-	// Clear out the last two bits to make sure the changes in data don't bite us - since we are multiplying
-	// the data integer we could end up with different results - i.e. if it was 198 before, now it's 200,
-	// and our multiplier is 10, then we would be comparing 1980 initially and 2000 after, which wouldn't
-	// give us the correct results.
-	// This could happen if this byte was used to store data from the embed image.
-	// Clearing the last two bites means regardless of any scenario, the number used should be the same.
-	clearedDataByte := clearLastTwoBits(colorInt)
-
-	// Set colorInt back to the clearedDataByte value but as an uint8,
-	// so we can multiply this with the multiplier.
-	// A byte is an alias for uint8 in Golang.
+	clearedDataByte := ClearLastNBits(colorInt, bitDepth)
 	colorInt = clearedDataByte
 
-	// Multiply the colorInt with the multiplier which gives us a 32-bit number.
-	// The multiplier is maxed at 8421504 so that we don't go over signed 32-bit max. That is,
-	// 255 * 8421504 = 2,147,483,520, and we don't go over 2,147,483,647.
-	// TODO: Investigate whether we can actually use unsigned 32-bit max as the limit
-	//multipliedColorInt := *(*uint32)(unsafe.Pointer(&colorInt)) * uMultiplier
 	multipliedColorInt := uint32(colorInt) * uMultiplier
-	// MaxIndex of a 32-bit number in a byte slice is 31 for 0 indexed, 16 bits to match the incoming indexes
 	var maxIndex uint16 = 31
 
-	// Run XOR on the colorInt - this will set the bits to 1 if the bits of the two numbers are different.
-	// After that, shift the bits to the right and then zero out all bits except the last one.
-	// Using maxIndex - uFirstIndex and maxIndex - uSecondIndex will shift the bits to the right
-	// by the amount of the index.
-	// For example, if the index is 2, then we will shift the bits to the right by 29 (31-2) bits.
-	// This will leave us with the last bit of the XORed number.
 	xorValue := uMaskInt ^ multipliedColorInt
 	firstIndexShift := maxIndex - uFirstIndex
 	firstShiftValue := xorValue >> firstIndexShift
@@ -172,6 +140,18 @@ func ReturnMaskDifference(maskInt int32, multiplier int32, firstIndex int16, sec
 	secondShiftedDataByte := secondShiftValue & 1
 
 	return shiftedDataByte == 1 && secondShiftedDataByte == 1
+}
+
+// ReturnMaskDifference will take in two bytes and identify if the data should be read or not by determining
+// if the data byte indexes are different from the mask byte indexes.
+//
+// The XOR operator will only set the bit to 1 if the bits are different. We use the XOR operator
+// to set all bits that are different to 1, then rotate the result and use the AND operator to zero
+// out all the bits besides the least significant bit. If that bit is 1, then the data bit was different
+// from the bit in the mask. We do that for both indexes, and then return true if both of them are 1 (i.e.,
+// the data bit was different from both bits in the mask).
+func ReturnMaskDifference(maskInt int32, multiplier int32, firstIndex int16, secondIndex int16, colorInt uint8) bool {
+	return ReturnMaskDifferenceN(maskInt, multiplier, firstIndex, secondIndex, colorInt, 2)
 }
 
 // QuartersOfBytes32 will take in a 32-bit unsigned integer and return a byte slice of length 16

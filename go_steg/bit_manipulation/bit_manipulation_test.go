@@ -587,6 +587,43 @@ func TestSplitByteConstructByteRoundtrip(t *testing.T) {
 	}
 }
 
+func TestReturnMaskDifferenceN(t *testing.T) {
+	tests := []struct {
+		name        string
+		maskInt     int32
+		multiplier  int32
+		firstIndex  int16
+		secondIndex int16
+		colorInt    uint8
+		bitDepth    int
+		want        bool
+	}{
+		{
+			name: "depth 2: same as original false case",
+			maskInt: 1, multiplier: 1, firstIndex: 0, secondIndex: 1,
+			colorInt: 1, bitDepth: 2, want: false,
+		},
+		{
+			name: "depth 2: same as original true case",
+			maskInt: 8, multiplier: 1, firstIndex: 28, secondIndex: 27,
+			colorInt: 16, bitDepth: 2, want: true,
+		},
+		{
+			name: "depth 1: clears only 1 bit",
+			maskInt: 8, multiplier: 1, firstIndex: 28, secondIndex: 27,
+			colorInt: 17, bitDepth: 1, want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ReturnMaskDifferenceN(tt.maskInt, tt.multiplier, tt.firstIndex, tt.secondIndex, tt.colorInt, tt.bitDepth)
+			if got != tt.want {
+				t.Errorf("ReturnMaskDifferenceN() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConstructByteFromQuarters(t *testing.T) {
 	type args struct {
 		first  byte
