@@ -31,10 +31,25 @@ func SplitByteIntoQuarters(b byte) [4]byte {
 	return [4]byte{b & firstQuarterOfByteMax >> 6, b & secondQuarterOfByteMax >> 4, b & thirdQuarterOfByteMax >> 2, b & fourthQuarterOfByteMax}
 }
 
+// ClearLastNBits clears the last n bits of b.
+func ClearLastNBits(b byte, n int) byte {
+	return b & (byte(0xFF) << n)
+}
+
+// SetLastNBits clears the last n bits of b and then sets them to valueToSet.
+func SetLastNBits(b byte, valueToSet byte, n int) byte {
+	return ClearLastNBits(b, n) | valueToSet
+}
+
+// GetLastNBits returns the last n bits of b.
+func GetLastNBits(b byte, n int) byte {
+	return b & byte((1<<n)-1)
+}
+
 // clearLastTwoBits will clear the last two bits of the passed in byte
 // We do this with a mask of 1111 1100, i.e., 0100 1101 & 1111 1100 -> 0100 1100
 func clearLastTwoBits(b byte) byte {
-	return b & byte(252)
+	return ClearLastNBits(b, 2)
 }
 
 // SetLastTwoBits will change the last two bits of the passed in byte to the value
@@ -49,12 +64,12 @@ func clearLastTwoBits(b byte) byte {
 // - Then we use the OR operator to set the last two bits to 11
 // - 0100 1100 | 0000 0011 -> 0100 1111
 func SetLastTwoBits(b byte, valueToSet byte) byte {
-	return clearLastTwoBits(b) | valueToSet
+	return SetLastNBits(b, valueToSet, 2)
 }
 
 // GetLastTwoBits will return a byte that is all 0s except for the last two bits of the passed in byte
 func GetLastTwoBits(b byte) byte {
-	return b & fourthQuarterOfByteMax
+	return GetLastNBits(b, 2)
 }
 
 // ConstructByteFromQuartersAsSlice builds a byte out of a slice of bytes
