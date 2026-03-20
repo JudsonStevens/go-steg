@@ -135,16 +135,6 @@ func chienSearch(errLoc []byte, n int) ([]int, error) {
 	return positions, nil
 }
 
-// evalPoly evaluates polynomial p at x in GF(256).
-// p[0] is the highest degree coefficient (standard form).
-func evalPoly(p []byte, x byte) byte {
-	val := p[0]
-	for i := 1; i < len(p); i++ {
-		val = gfMul(val, x) ^ p[i]
-	}
-	return val
-}
-
 // forney computes error magnitudes and corrects the codeword.
 func forney(codeword []byte, syndromes []byte, errLoc []byte, errPos []int) error {
 	nsym := len(syndromes)
