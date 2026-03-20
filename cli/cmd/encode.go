@@ -24,6 +24,7 @@ THE SOFTWARE.
 import (
 	"go-steg/cli/helpers"
 	"go-steg/go_steg/image_processing"
+	"go-steg/go_steg/pipeline"
 
 	"github.com/spf13/cobra"
 )
@@ -64,7 +65,8 @@ go-steg encode -e [embed_file] -c [carrier_files...] -p [password] -o [output_di
 			embedFileName,
 			1,
 			password,
-			encodeOutputFileDir)
+			encodeOutputFileDir,
+			pipeline.Config{BitDepth: 2, Password: password})
 		if err != nil {
 			panic(err)
 		}
