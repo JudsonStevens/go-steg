@@ -46,6 +46,41 @@ func GetLastNBits(b byte, n int) byte {
 	return b & byte((1<<n)-1)
 }
 
+// SplitByte splits a byte into chunks of bitsPerChunk bits, MSB-first.
+// For bitsPerChunk=3, produces 3 chunks (3+3+2 bits — last chunk has only 2 remaining bits).
+func SplitByte(b byte, bitsPerChunk int) []byte {
+	totalBits := 8
+	remaining := totalBits
+	var chunks []byte
+	for remaining > 0 {
+		bitsToTake := bitsPerChunk
+		if remaining < bitsToTake {
+			bitsToTake = remaining
+		}
+		shift := remaining - bitsToTake
+		chunk := (b >> shift) & byte((1<<bitsToTake)-1)
+		chunks = append(chunks, chunk)
+		remaining -= bitsToTake
+	}
+	return chunks
+}
+
+// ConstructByte reconstructs a byte from chunks produced by SplitByte.
+// For bitsPerChunk=3, the last chunk has only 2 real bits.
+func ConstructByte(chunks []byte, bitsPerChunk int) byte {
+	var result byte
+	remaining := 8
+	for _, chunk := range chunks {
+		bitsToPlace := bitsPerChunk
+		if remaining < bitsToPlace {
+			bitsToPlace = remaining
+		}
+		result = (result << bitsToPlace) | chunk
+		remaining -= bitsToPlace
+	}
+	return result
+}
+
 // clearLastTwoBits will clear the last two bits of the passed in byte
 // We do this with a mask of 1111 1100, i.e., 0100 1101 & 1111 1100 -> 0100 1100
 func clearLastTwoBits(b byte) byte {

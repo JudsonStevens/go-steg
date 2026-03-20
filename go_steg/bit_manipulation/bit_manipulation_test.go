@@ -515,6 +515,78 @@ func TestConstructByteFromQuartersAsSlice(t *testing.T) {
 	}
 }
 
+func TestSplitByte(t *testing.T) {
+	tests := []struct {
+		name         string
+		b            byte
+		bitsPerChunk int
+		want         []byte
+	}{
+		{"1-bit split of 0", 0, 1, []byte{0, 0, 0, 0, 0, 0, 0, 0}},
+		{"1-bit split of 255", 255, 1, []byte{1, 1, 1, 1, 1, 1, 1, 1}},
+		{"1-bit split of 170", 170, 1, []byte{1, 0, 1, 0, 1, 0, 1, 0}},
+		{"2-bit split of 0", 0, 2, []byte{0, 0, 0, 0}},
+		{"2-bit split of 255", 255, 2, []byte{3, 3, 3, 3}},
+		{"2-bit split of 1", 1, 2, []byte{0, 0, 0, 1}},
+		{"3-bit split of 0", 0, 3, []byte{0, 0, 0}},
+		{"3-bit split of 255", 255, 3, []byte{7, 7, 3}},
+		{"3-bit split of 170", 170, 3, []byte{5, 2, 2}},
+		{"4-bit split of 0", 0, 4, []byte{0, 0}},
+		{"4-bit split of 255", 255, 4, []byte{15, 15}},
+		{"4-bit split of 170", 170, 4, []byte{10, 10}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SplitByte(tt.b, tt.bitsPerChunk)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("SplitByte(%d, %d) = %v, want %v", tt.b, tt.bitsPerChunk, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConstructByte(t *testing.T) {
+	tests := []struct {
+		name         string
+		chunks       []byte
+		bitsPerChunk int
+		want         byte
+	}{
+		{"1-bit construct 0", []byte{0, 0, 0, 0, 0, 0, 0, 0}, 1, 0},
+		{"1-bit construct 255", []byte{1, 1, 1, 1, 1, 1, 1, 1}, 1, 255},
+		{"1-bit construct 170", []byte{1, 0, 1, 0, 1, 0, 1, 0}, 1, 170},
+		{"2-bit construct 0", []byte{0, 0, 0, 0}, 2, 0},
+		{"2-bit construct 255", []byte{3, 3, 3, 3}, 2, 255},
+		{"2-bit construct 65", []byte{1, 0, 0, 1}, 2, 65},
+		{"3-bit construct 0", []byte{0, 0, 0}, 3, 0},
+		{"3-bit construct 255", []byte{7, 7, 3}, 3, 255},
+		{"3-bit construct 170", []byte{5, 2, 2}, 3, 170},
+		{"4-bit construct 0", []byte{0, 0}, 4, 0},
+		{"4-bit construct 255", []byte{15, 15}, 4, 255},
+		{"4-bit construct 170", []byte{10, 10}, 4, 170},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ConstructByte(tt.chunks, tt.bitsPerChunk); got != tt.want {
+				t.Errorf("ConstructByte(%v, %d) = %d, want %d", tt.chunks, tt.bitsPerChunk, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSplitByteConstructByteRoundtrip(t *testing.T) {
+	for depth := 1; depth <= 4; depth++ {
+		for b := 0; b < 256; b++ {
+			chunks := SplitByte(byte(b), depth)
+			reconstructed := ConstructByte(chunks, depth)
+			if reconstructed != byte(b) {
+				t.Errorf("Roundtrip failed: depth=%d, byte=%d, chunks=%v, reconstructed=%d",
+					depth, b, chunks, reconstructed)
+			}
+		}
+	}
+}
+
 func TestConstructByteFromQuarters(t *testing.T) {
 	type args struct {
 		first  byte
