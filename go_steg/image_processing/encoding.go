@@ -126,7 +126,7 @@ func MultiCarrierEncodeByFileNames(
 	logger.Infof("Number of carrier files: %v", len(carrierFileNames))
 
 	//Make a slice to hold the names of the embedded carrier image files
-	embeddedCarrierFileNames := make([]string, len(carrierFileNames))
+	embeddedCarrierFileNames := make([]string, 0, len(carrierFileNames))
 
 	//Make a slice to hold the carrier files after they've been read/opened
 	carriers := make([]io.Reader, 0, len(carrierFileNames))
@@ -172,9 +172,9 @@ func MultiCarrierEncodeByFileNames(
 	}
 
 	//Make a slice of io writers in order to create the new files that are embedded
-	embeddedCarrierWriters := make([]io.Writer, 0, len(embeddedCarrierFileNames[1:]))
+	embeddedCarrierWriters := make([]io.Writer, 0, len(embeddedCarrierFileNames))
 
-	for _, name := range embeddedCarrierFileNames[1:] {
+	for _, name := range embeddedCarrierFileNames {
 		result, err := os.Create(name)
 		if err != nil {
 			logger.Errorf("Error creating result file %s: %s", name, err)
@@ -229,22 +229,22 @@ func MultiCarrierEncode(carriers []io.Reader, data io.Reader, results []io.Write
 
 	//Make the chunk size the length of the byte slices divided by the number of carrier files
 	chunkSize := len(pipelineOutput) / len(carriers)
+	if chunkSize == 0 {
+		chunkSize = len(pipelineOutput)
+	}
 
-	//Make a slice of readers with a starting length of 0 and a cap using the number of carrier files
+	//Split pipeline output into chunks, one per carrier
 	dataChunks := make([]io.Reader, 0, len(carriers))
-
-	//Initialize a counter for the for loop in order to track the number of chunks put into encoder
-	chunksCount := 0
-	//Run a loop while the increment counter is less than the total length of the byte array
-	// and the chunks count is less than the total number of carriers
-	for i := 0; i < len(pipelineOutput) && chunksCount < len(carriers); i += chunkSize {
-		chunksCount++
-		//If the increment counter plus the chunkSize is larger than the length of the pipelineOutput slice,
-		// or if the number of chunks already added is equal to the number of carriers, append whatever is left
-		if i+chunkSize >= len(pipelineOutput) || chunksCount == len(carriers) {
-			dataChunks = append(dataChunks, bytes.NewReader(pipelineOutput[i:]))
+	for i := 0; i < len(carriers); i++ {
+		start := i * chunkSize
+		var end int
+		if i == len(carriers)-1 {
+			// Last carrier gets everything remaining (handles uneven splits)
+			end = len(pipelineOutput)
+		} else {
+			end = start + chunkSize
 		}
-		dataChunks = append(dataChunks, bytes.NewReader(pipelineOutput[i:i+chunkSize]))
+		dataChunks = append(dataChunks, bytes.NewReader(pipelineOutput[start:end]))
 	}
 
 	//Generate the mask information
