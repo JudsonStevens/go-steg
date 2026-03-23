@@ -393,6 +393,81 @@ func TestGetLastTwoBits(t *testing.T) {
 	}
 }
 
+func TestClearLastNBits(t *testing.T) {
+	tests := []struct {
+		name string
+		b    byte
+		n    int
+		want byte
+	}{
+		{"clear 1 bit from 255", 255, 1, 254},
+		{"clear 2 bits from 255", 255, 2, 252},
+		{"clear 3 bits from 255", 255, 3, 248},
+		{"clear 4 bits from 255", 255, 4, 240},
+		{"clear 2 bits from 0", 0, 2, 0},
+		{"clear 2 bits from 66", 66, 2, 64},
+		{"clear 1 bit from 1", 1, 1, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ClearLastNBits(tt.b, tt.n); got != tt.want {
+				t.Errorf("ClearLastNBits(%d, %d) = %d, want %d", tt.b, tt.n, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetLastNBits(t *testing.T) {
+	tests := []struct {
+		name       string
+		b          byte
+		valueToSet byte
+		n          int
+		want       byte
+	}{
+		{"set 2 bits: 0 with 3", 0, 3, 2, 3},
+		{"set 2 bits: 255 with 2", 255, 2, 2, 254},
+		{"set 1 bit: 0 with 1", 0, 1, 1, 1},
+		{"set 1 bit: 255 with 0", 255, 0, 1, 254},
+		{"set 3 bits: 0 with 7", 0, 7, 3, 7},
+		{"set 3 bits: 255 with 5", 255, 5, 3, 253},
+		{"set 4 bits: 0 with 15", 0, 15, 4, 15},
+		{"set 4 bits: 255 with 10", 255, 10, 4, 250},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SetLastNBits(tt.b, tt.valueToSet, tt.n); got != tt.want {
+				t.Errorf("SetLastNBits(%d, %d, %d) = %d, want %d", tt.b, tt.valueToSet, tt.n, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetLastNBits(t *testing.T) {
+	tests := []struct {
+		name string
+		b    byte
+		n    int
+		want byte
+	}{
+		{"get 2 bits from 255", 255, 2, 3},
+		{"get 2 bits from 0", 0, 2, 0},
+		{"get 1 bit from 255", 255, 1, 1},
+		{"get 1 bit from 0", 0, 1, 0},
+		{"get 3 bits from 255", 255, 3, 7},
+		{"get 3 bits from 5", 5, 3, 5},
+		{"get 4 bits from 255", 255, 4, 15},
+		{"get 4 bits from 170", 170, 4, 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetLastNBits(tt.b, tt.n); got != tt.want {
+				t.Errorf("GetLastNBits(%d, %d) = %d, want %d", tt.b, tt.n, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConstructByteFromQuartersAsSlice(t *testing.T) {
 	type args struct {
 		b []byte
@@ -435,6 +510,115 @@ func TestConstructByteFromQuartersAsSlice(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := ConstructByteFromQuartersAsSlice(tt.args.b); got != tt.want {
 				t.Errorf("ConstructByteFromQuartersAsSlice() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSplitByte(t *testing.T) {
+	tests := []struct {
+		name         string
+		b            byte
+		bitsPerChunk int
+		want         []byte
+	}{
+		{"1-bit split of 0", 0, 1, []byte{0, 0, 0, 0, 0, 0, 0, 0}},
+		{"1-bit split of 255", 255, 1, []byte{1, 1, 1, 1, 1, 1, 1, 1}},
+		{"1-bit split of 170", 170, 1, []byte{1, 0, 1, 0, 1, 0, 1, 0}},
+		{"2-bit split of 0", 0, 2, []byte{0, 0, 0, 0}},
+		{"2-bit split of 255", 255, 2, []byte{3, 3, 3, 3}},
+		{"2-bit split of 1", 1, 2, []byte{0, 0, 0, 1}},
+		{"3-bit split of 0", 0, 3, []byte{0, 0, 0}},
+		{"3-bit split of 255", 255, 3, []byte{7, 7, 3}},
+		{"3-bit split of 170", 170, 3, []byte{5, 2, 2}},
+		{"4-bit split of 0", 0, 4, []byte{0, 0}},
+		{"4-bit split of 255", 255, 4, []byte{15, 15}},
+		{"4-bit split of 170", 170, 4, []byte{10, 10}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SplitByte(tt.b, tt.bitsPerChunk)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("SplitByte(%d, %d) = %v, want %v", tt.b, tt.bitsPerChunk, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestConstructByte(t *testing.T) {
+	tests := []struct {
+		name         string
+		chunks       []byte
+		bitsPerChunk int
+		want         byte
+	}{
+		{"1-bit construct 0", []byte{0, 0, 0, 0, 0, 0, 0, 0}, 1, 0},
+		{"1-bit construct 255", []byte{1, 1, 1, 1, 1, 1, 1, 1}, 1, 255},
+		{"1-bit construct 170", []byte{1, 0, 1, 0, 1, 0, 1, 0}, 1, 170},
+		{"2-bit construct 0", []byte{0, 0, 0, 0}, 2, 0},
+		{"2-bit construct 255", []byte{3, 3, 3, 3}, 2, 255},
+		{"2-bit construct 65", []byte{1, 0, 0, 1}, 2, 65},
+		{"3-bit construct 0", []byte{0, 0, 0}, 3, 0},
+		{"3-bit construct 255", []byte{7, 7, 3}, 3, 255},
+		{"3-bit construct 170", []byte{5, 2, 2}, 3, 170},
+		{"4-bit construct 0", []byte{0, 0}, 4, 0},
+		{"4-bit construct 255", []byte{15, 15}, 4, 255},
+		{"4-bit construct 170", []byte{10, 10}, 4, 170},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ConstructByte(tt.chunks, tt.bitsPerChunk); got != tt.want {
+				t.Errorf("ConstructByte(%v, %d) = %d, want %d", tt.chunks, tt.bitsPerChunk, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSplitByteConstructByteRoundtrip(t *testing.T) {
+	for depth := 1; depth <= 4; depth++ {
+		for b := 0; b < 256; b++ {
+			chunks := SplitByte(byte(b), depth)
+			reconstructed := ConstructByte(chunks, depth)
+			if reconstructed != byte(b) {
+				t.Errorf("Roundtrip failed: depth=%d, byte=%d, chunks=%v, reconstructed=%d",
+					depth, b, chunks, reconstructed)
+			}
+		}
+	}
+}
+
+func TestReturnMaskDifferenceN(t *testing.T) {
+	tests := []struct {
+		name        string
+		maskInt     int32
+		multiplier  int32
+		firstIndex  int16
+		secondIndex int16
+		colorInt    uint8
+		bitDepth    int
+		want        bool
+	}{
+		{
+			name: "depth 2: same as original false case",
+			maskInt: 1, multiplier: 1, firstIndex: 0, secondIndex: 1,
+			colorInt: 1, bitDepth: 2, want: false,
+		},
+		{
+			name: "depth 2: same as original true case",
+			maskInt: 8, multiplier: 1, firstIndex: 28, secondIndex: 27,
+			colorInt: 16, bitDepth: 2, want: true,
+		},
+		{
+			name: "depth 1: clears only 1 bit",
+			maskInt: 8, multiplier: 1, firstIndex: 28, secondIndex: 27,
+			colorInt: 17, bitDepth: 1, want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ReturnMaskDifferenceN(tt.maskInt, tt.multiplier, tt.firstIndex, tt.secondIndex, tt.colorInt, tt.bitDepth)
+			if got != tt.want {
+				t.Errorf("ReturnMaskDifferenceN() = %v, want %v", got, tt.want)
 			}
 		})
 	}

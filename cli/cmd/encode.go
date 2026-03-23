@@ -22,8 +22,13 @@ THE SOFTWARE.
 */
 
 import (
+	"path/filepath"
+	"strings"
+
 	"go-steg/cli/helpers"
 	"go-steg/go_steg/image_processing"
+	"go-steg/go_steg/pipeline"
+	"go-steg/go_steg/reed_solomon"
 
 	"github.com/spf13/cobra"
 )
@@ -32,13 +37,17 @@ var embedFileName string
 var carrierFileNames []string
 var password string
 var encodeOutputFileDir string
+var bitDepth int
+var huffmanEnabled bool
+var rsEnabled bool
+var rsLevel string
 
 // encodeCmd represents the encode command
 var encodeCmd = &cobra.Command{
 	Use:   "encode -e [embed_file] -c [carrier_files...] -p [password] -o [output_dir] -u",
 	Short: "Embed a photo into another photo or group of photos",
-	Long: `Given an "embed" photo, a single or list of "carrier" photos, and a password, 
-embed the "embed" photo into the "carrier" photo(s) and output the resulting altered files with the mask information. 
+	Long: `Given an "embed" photo, a single or list of "carrier" photos, and a password,
+embed the "embed" photo into the "carrier" photo(s) and output the resulting altered files with the mask information.
 This method will use the passed in password to attempt to generate a mask to use to secure the embedded information.
 Depending on the mask generated, we may need to generate a new mask to use to secure the embedded information,
 as the size of embed information may be larger than the mask can handle.
@@ -59,12 +68,28 @@ go-steg encode -e [embed_file] -c [carrier_files...] -p [password] -o [output_di
 			}
 		}
 
+		if bitDepth < 1 || bitDepth > 4 {
+			panic("bitDepth must be between 1 and 4")
+		}
+
+		ext := strings.TrimPrefix(filepath.Ext(embedFileName), ".")
+
+		rsLevelVal := reed_solomon.Standard
+		if rsLevel == "high" {
+			rsLevelVal = reed_solomon.High
+		}
+
+		cfg := pipeline.Config{
+			BitDepth:       bitDepth,
+			HuffmanEnabled: huffmanEnabled,
+			RSEnabled:      rsEnabled,
+			RSLevel:        rsLevelVal,
+			FileExtension:  ext,
+			Password:       password,
+		}
+
 		err = image_processing.EncodeByFileNames(
-			carrierFileNames,
-			embedFileName,
-			1,
-			password,
-			encodeOutputFileDir)
+			carrierFileNames, embedFileName, 1, password, encodeOutputFileDir, cfg)
 		if err != nil {
 			panic(err)
 		}
@@ -79,7 +104,7 @@ func init() {
 		"embedFileName",
 		"e",
 		"",
-		"The name of the file to embed into the carrier file(s)")
+		"The file to embed into the carrier file(s)")
 	err := encodeCmd.MarkPersistentFlagRequired("embedFileName")
 	if err != nil {
 		panic(err)
@@ -136,4 +161,13 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	encodeCmd.PersistentFlags().IntVarP(&bitDepth, "bitDepth", "b", 2,
+		"Bits per channel (1-4). Higher values increase capacity but reduce stealth")
+	encodeCmd.PersistentFlags().BoolVar(&huffmanEnabled, "huffman", false,
+		"Enable Huffman compression (password-derived)")
+	encodeCmd.PersistentFlags().BoolVar(&rsEnabled, "rs", false,
+		"Enable Reed-Solomon error correction")
+	encodeCmd.PersistentFlags().StringVar(&rsLevel, "rsLevel", "standard",
+		"RS redundancy level: 'standard' (~14%) or 'high' (~34%)")
 }

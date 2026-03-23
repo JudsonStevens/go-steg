@@ -36,6 +36,17 @@ This would allow for the sharing of images that contain other images, which coul
 2. Run `go install` to install the package (currently using Go 1.20)
 3. Run `go-steg` to see the help menu
 
+```bash
+# Basic encode (backwards compatible)
+go-steg encode -e embed.png -c carrier.png -p password -o output/ -u
+
+# Encode any file type with all features
+go-steg encode -e document.pdf -c carrier.png -p password -o output/ -u -b 3 --huffman --rs --rsLevel high
+
+# Decode (automatically detects features from header)
+go-steg decode -c output/carrier-0-embedded.png -p password -o output/
+```
+
 ## Example Images
 
 ### Image to be Embedded
@@ -71,6 +82,43 @@ on <a href="https://unsplash.com/?utm_source=unsplash&utm_medium=referral&utm_co
 - [Protecting Information with Subcodstanography](https://www.researchgate.net/publication/313687159_Protecting_Information_with_Subcodstanography)
 - [Indiscernability Mask Key for Image Steganography](https://www.researchgate.net/publication/341300833_Indiscernibility_Mask_Key_for_Image_Steganography)
 - [Data Masking: A New Approach for Steganography](https://www.researchgate.net/publication/220540605_Data_Masking_A_New_Approach_for_Steganography)
+
+## Reed-Solomon Error Correction
+
+### What is Reed-Solomon?
+
+Reed-Solomon codes are a class of error-correcting codes based on polynomial arithmetic over finite fields — specifically Galois Field GF(256) in this implementation. Originally developed by Irving Reed and Gustave Solomon in 1960, they are ubiquitous in modern data reliability: deep-space communication (the Voyager probes rely on them), QR codes, CDs, DVDs, and RAID storage all use Reed-Solomon in some form.
+
+### How it works
+
+Data is treated as coefficients of a polynomial over GF(256). Parity bytes are computed by evaluating this polynomial at specific points. On decode, if errors are present, the *syndromes* (evaluations at those same points) reveal that something went wrong. The Berlekamp-Massey algorithm identifies which byte positions are corrupted, and the Forney algorithm computes the exact correction values needed to restore the original data — without any retransmission or second copy of the data.
+
+### How go-steg uses it
+
+When RS is enabled (`--rs`), the encoding pipeline divides the payload into blocks and appends parity bytes to each block before embedding. Two protection levels are available:
+
+| Level | Code | Parity bytes | Max correctable errors | Overhead |
+|-------|------|-------------|----------------------|----------|
+| Standard (default) | RS(255,223) | 32 per 223-byte block | 16 byte errors per block | ~14% |
+| High (`--rsLevel high`) | RS(255,191) | 64 per 191-byte block | 32 byte errors per block | ~34% |
+
+The level used during encoding is recorded in the stego header, so the decoder automatically applies the correct RS parameters — no flags are needed at decode time.
+
+### What RS can and cannot protect against
+
+**RS will correct:**
+- Minor channel-value rounding from PNG re-saves — changes of ±1 in a pixel channel produce correctable bit-level errors well within the block capacity.
+- Minor bit-level corruption introduced by slight image processing (brightness/contrast adjustments, color space conversions) as long as the number of affected bytes per 255-byte block stays within the level's limit.
+
+**RS cannot correct:**
+- JPEG recompression — DCT quantization destroys LSBs entirely. The extracted bit stream is not "slightly corrupted data" that RS can fix; it is essentially garbage relative to the original payload.
+- Header area damage — the stego header is not RS-protected. If the header pixels are altered, decoding fails before any RS decoding even occurs.
+
+### Choosing a redundancy level
+
+**Standard (~14% overhead)** is the right default for most use cases. It handles the minor corruption that results from PNG re-saving or slight image processing, and the capacity cost is modest.
+
+**High (~34% overhead)** is appropriate when the carrier image may undergo multiple re-saves, color space conversions, or light processing before decoding. If reliability matters more than raw embedding capacity, the overhead is worth it.
 
 ## Notes
 
