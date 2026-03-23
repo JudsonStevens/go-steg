@@ -1,51 +1,80 @@
 <div align="center">
-  <img 
-    src=https://github.com/JudsonStevens/go-steg/assets/35241250/7be4023c-e948-4c62-86d0-09bf5c1b1cf0 
-    width="300" 
-    height="300" 
-    alt="Cartoonish and stylized large dinosaur on a small rocky island with greenery, and an orange and red round 
-      backdrop showing towers of stone in the background. The dinosaur is a mixture of a stegosaurus and a 
-      tyrannosaurus rex." 
+  <img
+    src=https://github.com/JudsonStevens/go-steg/assets/35241250/7be4023c-e948-4c62-86d0-09bf5c1b1cf0
+    width="300"
+    height="300"
+    alt="Cartoonish and stylized large dinosaur on a small rocky island with greenery, and an orange and red round
+      backdrop showing towers of stone in the background. The dinosaur is a mixture of a stegosaurus and a
+      tyrannosaurus rex."
   />
 </div>
 
 # Go-Steg
-`go-steg` is a package that allows you to embed images inside other images using Least Significant Bit manipulation.
-This is a form of [steganography](https://www.kaspersky.com/resource-center/definitions/what-is-steganography),
-which is the practice of hiding information in plain sight.
-This package also allows you to embed an image with the use of a password.
-This is used to generate
-an [indiscernibility mask](https://www.researchgate.net/publication/341300833_Indiscernibility_Mask_Key_for_Image_Steganography)
-that allows the image to be embedded in a way that makes it tough (to potentially impossible) to detect
-by common steganography detection (also termed "steganalysis") tools.
-Here's a list of useful tools for steganography in general, including detection:
-[Steganography Tools](https://0xrick.github.io/lists/stego/).
 
-The impetus for writing this tool was to explore and learn more about steganography, and to see how it could be used in
-a practical way.
-At the time of writing, there also were few Go-based tools for steganography, so this was a good opportunity to
-contribute to the Go community.
+`go-steg` is a steganography toolkit that hides arbitrary files inside PNG and JPEG carrier images using Least Significant Bit (LSB) embedding. It supports multi-carrier splitting, variable bit depth, Huffman compression, Reed-Solomon error correction, and password-derived indiscernibility masking.
 
-Moving forward, the goal is to primarily allow for the embedding of images into "carrier" images that then can be
-uploaded to image sharing sites.
-This would allow for the sharing of images that contain other images, which could be used for a variety of purposes.
+Built in Go, `go-steg` began as an exploration of [steganography](https://www.kaspersky.com/resource-center/definitions/what-is-steganography) — the practice of hiding information in plain sight. It has since grown into a full-featured pipeline for embedding, protecting, and recovering hidden data.
+
+## Features
+
+- **Any file type** — embed documents, archives, images, or any binary data (not just images)
+- **Multi-carrier splitting** — split data across multiple carrier images for larger payloads
+- **Variable bit depth (1-4 bits)** — trade stealth for capacity per channel
+- **Huffman compression** — password-derived compression to reduce payload size
+- **Reed-Solomon error correction** — recover data even after minor carrier corruption
+- **Indiscernibility masking** — password-derived pixel selection mask that resists steganalysis detection
+- **Self-describing headers** — encoded metadata (format, bit depth, compression, RS level, checksums) allows decode to auto-detect all settings
+- **PNG and JPEG carriers** — accepts both formats as input (output is always PNG to preserve LSBs)
 
 ## Getting Started
 
-1. Clone down the repository
-2. Run `go install` to install the package (currently using Go 1.20)
+1. Clone the repository
+2. Run `go install` (requires Go 1.20+)
 3. Run `go-steg` to see the help menu
 
+## Usage
+
+### Encode
+
 ```bash
-# Basic encode (backwards compatible)
-go-steg encode -e embed.png -c carrier.png -p password -o output/ -u
+# Basic encode with password masking
+go-steg encode -e secret.pdf -c carrier.png -p mypassword -o output/ -u
 
-# Encode any file type with all features
-go-steg encode -e document.pdf -c carrier.png -p password -o output/ -u -b 3 --huffman --rs --rsLevel high
+# Multi-carrier encode (splits data across carriers)
+go-steg encode -e largefile.zip -c carrier1.png,carrier2.png -p mypassword -o output/ -u
 
-# Decode (automatically detects features from header)
-go-steg decode -c output/carrier-0-embedded.png -p password -o output/
+# Full pipeline: higher bit depth + compression + error correction
+go-steg encode -e document.pdf -c carrier.png -p mypassword -o output/ -u \
+  -b 3 --huffman --rs --rsLevel high
+
+# Encode without masking (faster, less stealthy)
+go-steg encode -e data.bin -c carrier.png -p mypassword -o output/
 ```
+
+### Decode
+
+```bash
+# Decode automatically detects all encoding settings from the header
+go-steg decode -c output/carrier-0-embedded.png -p mypassword -o decoded/
+
+# Multi-carrier decode (order must match encoding order)
+go-steg decode -c output/carrier1-0-embedded.png,output/carrier2-1-embedded.png \
+  -p mypassword -o decoded/
+```
+
+### Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--embedFileName` | `-e` | File to embed into carrier(s) | required |
+| `--carrierFileNames` | `-c` | Carrier image(s), comma-separated | required |
+| `--password` | `-p` | Password for masking and Huffman key | required |
+| `--outputFileDir` | `-o` | Output directory | required |
+| `--useMask` | `-u` | Enable indiscernibility mask | `false` |
+| `--bitDepth` | `-b` | Bits per channel (1-4) | `2` |
+| `--huffman` | | Enable Huffman compression | `false` |
+| `--rs` | | Enable Reed-Solomon error correction | `false` |
+| `--rsLevel` | | RS redundancy: `standard` or `high` | `standard` |
 
 ## Example Images
 
@@ -77,60 +106,111 @@ by <a href="https://unsplash.com/fr/@danieljschwarz?utm_source=unsplash&utm_medi
 Daniel J. Schwarz</a>
 on <a href="https://unsplash.com/?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText">Unsplash</a>
 
-## Resources
-- [Hiding Images in Plain Sight: Deep Steganography](https://towardsdatascience.com/hiding-images-in-plain-sight-deep-steganography-8d4f6e5e8f2f)
-- [Protecting Information with Subcodstanography](https://www.researchgate.net/publication/313687159_Protecting_Information_with_Subcodstanography)
-- [Indiscernability Mask Key for Image Steganography](https://www.researchgate.net/publication/341300833_Indiscernibility_Mask_Key_for_Image_Steganography)
-- [Data Masking: A New Approach for Steganography](https://www.researchgate.net/publication/220540605_Data_Masking_A_New_Approach_for_Steganography)
+## How It Works
+
+### Encoding Pipeline
+
+Data flows through an optional processing pipeline before being embedded into carrier pixels:
+
+```
+Input File
+  → Huffman Compression (if --huffman)
+  → Reed-Solomon Encoding (if --rs)
+  → Bit Splitting (split bytes into N-bit chunks)
+  → LSB Embedding (write chunks into carrier pixel channels)
+  → Header Writing (metadata into reserved pixels 0-33)
+  → PNG Output
+```
+
+### Header Format
+
+The first 34 pixels of column 0 store a self-describing header:
+
+| Pixels | Content |
+|--------|---------|
+| 0-7 | Photo ID (64-bit) |
+| 8 | Photo number (for multi-carrier ordering) |
+| 9-12 | Data count (embedded chunk count) |
+| 13-14 | Version marker (new format detection) |
+| 15-25 | File extension (up to 8 chars) |
+| 26 | Encoding flags (bit depth, Huffman, RS, RS level) |
+| 27-28 | CRC checksum (12-bit) |
+| 29-30 | Byte count modulo (12-bit) |
+| 31-33 | Reserved |
+
+The header uses 2-bit operations regardless of the payload bit depth, ensuring backward compatibility.
+
+### Indiscernibility Masking
+
+When enabled (`-u`), the password generates a deterministic pixel selection mask via SHA-256 hashing. Only pixels that pass the mask filter are used for embedding, making the modification pattern unpredictable without the password. This increases resistance to statistical steganalysis at the cost of reduced capacity.
+
+For more on this technique, see: [Indiscernibility Mask Key for Image Steganography](https://www.researchgate.net/publication/341300833_Indiscernibility_Mask_Key_for_Image_Steganography).
+
+### Capacity
+
+Embedding capacity depends on carrier dimensions, bit depth, and whether masking is enabled:
+
+```
+Raw capacity (bytes) = (width × (height - 34) × 3) / ceil(8 / bitDepth)
+```
+
+For a 1080x1350 carrier at bit depth 2: ~1,065,600 bytes (~1 MB).
+
+Pipeline processing affects effective capacity:
+- **Huffman** — typically reduces payload size (compression), increasing effective capacity
+- **Reed-Solomon Standard** — adds ~14% overhead
+- **Reed-Solomon High** — adds ~34% overhead
+- **Masking** — reduces available pixels (varies by password and carrier content)
 
 ## Reed-Solomon Error Correction
 
-### What is Reed-Solomon?
+Reed-Solomon codes are error-correcting codes based on polynomial arithmetic over Galois Field GF(256). Originally developed by Irving Reed and Gustave Solomon in 1960, they are used in deep-space communication, QR codes, CDs, DVDs, and RAID storage.
 
-Reed-Solomon codes are a class of error-correcting codes based on polynomial arithmetic over finite fields — specifically Galois Field GF(256) in this implementation. Originally developed by Irving Reed and Gustave Solomon in 1960, they are ubiquitous in modern data reliability: deep-space communication (the Voyager probes rely on them), QR codes, CDs, DVDs, and RAID storage all use Reed-Solomon in some form.
-
-### How it works
-
-Data is treated as coefficients of a polynomial over GF(256). Parity bytes are computed by evaluating this polynomial at specific points. On decode, if errors are present, the *syndromes* (evaluations at those same points) reveal that something went wrong. The Berlekamp-Massey algorithm identifies which byte positions are corrupted, and the Forney algorithm computes the exact correction values needed to restore the original data — without any retransmission or second copy of the data.
-
-### How go-steg uses it
-
-When RS is enabled (`--rs`), the encoding pipeline divides the payload into blocks and appends parity bytes to each block before embedding. Two protection levels are available:
+When RS is enabled (`--rs`), the pipeline divides the payload into blocks and appends parity bytes before embedding:
 
 | Level | Code | Parity bytes | Max correctable errors | Overhead |
 |-------|------|-------------|----------------------|----------|
 | Standard (default) | RS(255,223) | 32 per 223-byte block | 16 byte errors per block | ~14% |
 | High (`--rsLevel high`) | RS(255,191) | 64 per 191-byte block | 32 byte errors per block | ~34% |
 
-The level used during encoding is recorded in the stego header, so the decoder automatically applies the correct RS parameters — no flags are needed at decode time.
-
-### What RS can and cannot protect against
+The level is recorded in the header, so the decoder applies the correct parameters automatically.
 
 **RS will correct:**
-- Minor channel-value rounding from PNG re-saves — changes of ±1 in a pixel channel produce correctable bit-level errors well within the block capacity.
-- Minor bit-level corruption introduced by slight image processing (brightness/contrast adjustments, color space conversions) as long as the number of affected bytes per 255-byte block stays within the level's limit.
+- Minor channel-value rounding from PNG re-saves
+- Minor bit-level corruption from slight image processing (brightness/contrast, color space conversions) within the block error limit
 
 **RS cannot correct:**
-- JPEG recompression — DCT quantization destroys LSBs entirely. The extracted bit stream is not "slightly corrupted data" that RS can fix; it is essentially garbage relative to the original payload.
-- Header area damage — the stego header is not RS-protected. If the header pixels are altered, decoding fails before any RS decoding even occurs.
+- JPEG recompression (DCT quantization destroys LSBs entirely)
+- Header area damage (header pixels are not RS-protected)
 
-### Choosing a redundancy level
+## Architecture
 
-**Standard (~14% overhead)** is the right default for most use cases. It handles the minor corruption that results from PNG re-saving or slight image processing, and the capacity cost is modest.
+```
+go-steg/
+├── cli/                          # Cobra CLI (encode/decode commands)
+│   ├── cmd/
+│   └── helpers/
+├── go_steg/
+│   ├── bit_manipulation/         # Bit-level operations (split, construct, LSB get/set)
+│   ├── huffman/                  # Huffman codec (password-derived encoding)
+│   ├── image_processing/         # Core encode/decode, header, multi-carrier, masking
+│   ├── pipeline/                 # Encode/decode pipeline orchestration
+│   └── reed_solomon/             # GF(256) arithmetic, RS encoder/decoder
+```
 
-**High (~34% overhead)** is appropriate when the carrier image may undergo multiple re-saves, color space conversions, or light processing before decoding. If reliability matters more than raw embedding capacity, the overhead is worth it.
+## Background
 
-## Notes
+Some background on how LSB steganography works with digital images:
 
-- Use `go install` to install the package.
+- Digital images are made up of pixels, each with color channels (Red, Green, Blue, Alpha).
+- Each channel is a byte (0-255). A color like (255, 0, 0, 255) is fully opaque red.
+- The least significant bits of each channel carry the least visual information — changing them is imperceptible to the human eye.
+- At bit depth 2, changing the last 2 bits of a channel shifts its value by at most 3 out of 255 — a ~1.2% change that is visually undetectable.
 
-Some background on images:
+## Resources
 
-- Digital images are typically made up of pixels.
-- Each pixel has different color channels - your general RGBA digital image has 4 channels, one each for Red,
-  Green, Blue, and Alpha (transparency).
-- Each channel is typically represented by a byte, so each pixel is 4 bytes.
-- When you see a color written out as (255, 0, 0, 255), that's the RGBA representation of the color red. The first 3
-  bytes are the RGB values, and the last byte is the alpha value.
-- The alpha value is typically 255 for opaque images, but can be anything from 0 to 255. 0 is completely
-  transparent, and 255 is completely opaque.
+- [Hiding Images in Plain Sight: Deep Steganography](https://towardsdatascience.com/hiding-images-in-plain-sight-deep-steganography-8d4f6e5e8f2f)
+- [Protecting Information with Subcodstanography](https://www.researchgate.net/publication/313687159_Protecting_Information_with_Subcodstanography)
+- [Indiscernibility Mask Key for Image Steganography](https://www.researchgate.net/publication/341300833_Indiscernibility_Mask_Key_for_Image_Steganography)
+- [Data Masking: A New Approach for Steganography](https://www.researchgate.net/publication/220540605_Data_Masking_A_New_Approach_for_Steganography)
+- [Steganography Tools](https://0xrick.github.io/lists/stego/)
